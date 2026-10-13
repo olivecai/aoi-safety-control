@@ -12,6 +12,8 @@ MODE_SAFE = 1
 p1_f, p0_f = 0.93, 0.91   # forward:  stay-success, stay-failure
 p1_b, p0_b = 0.93, 0.91   # backward: stay-success, stay-failure
 
+Cz = np.array([15.0, 0.05, 0, 0, 0, 0, 0, 0])
+
 # N_s := length of simulation
 
 #eq 1 
@@ -61,28 +63,30 @@ def HLS(status_of_the_link, ideal_msg_update, hls_update):
 # eq 4
 def P_sigma(p0, p1):
     '''
-    p0, p1 are the probabilities of staying in the same state for a single link (forward or backward)
-    p0 means stay in HUMAN MODE
-      p1 means stay in SAFE MODE
+    Packet success/failure chain for ONE link (forward or backward).
+    State 0 = packet lost, state 1 = packet arrived.
+    P[i, j] = P(next state = i | current state = j). Columns sum to 1.
+    p0 = P(lost next    | lost now)      "stay failed"
+    p1 = P(arrived next | arrived now)   "stay successful"
     '''
-    Pi_sigma_k = np.array([[p0, 1-p1],[1-p0, p1]])
-    return Pi_sigma_k
+    return np.array([[p0,     1 - p1],
+                     [1 - p0, p1    ]])
 
 # eq 5
 # augmented state z(t) = [xp(t)_T xc(t)_T ur(t-1) yl(t-1)]_T
 def update_G(xp, xc, ur_prev, yl_prev, h, sf, sb, m):
     A, B = build_mode(sf=sf, sb=sb, m=m)
-    z= np.array([xp.reshape(1,-1), xc.reshape(1,-1), ur_prev, yl_prev]) 
-    z_next = A @ z + B @ h 
+    z= np.concatenate([xp, xc, [ur_prev], [yl_prev]]) 
+    z_next = A @ z + B[:,0] * h 
     return z_next
 
 #eq 6 eq 7
 def build_mode(sf, sb, m): 
     """A_tau, B_tau for tau = (sigma_f, sigma_b, zeta=m). Eq. (6)-(7).
-    State z = [x_p (2), x_c (4), u_r(t-1) (1), y_l(t-1) (1)]."""
+    State z = [x_p (size 2), x_c (size 4), u_r(t-1) (size 1), y_l(t-1) (size 1)]."""
     Ap, Bp, Cp = A_plant[m], B_plant[m], C_plant[m]
     Ac, Bc, Cc, Dc = A_controller[m], B_controller[m], C_controller[m], D_controller[m]
-    Z = np.zeros
+    Z = np.zeros #function can be called by Z(..)
     I1 = np.eye(1)
 
     if sf and sb:            # (1,1,0): both packets arrive
@@ -125,7 +129,7 @@ def aoi(link_status, aoi):
 
 # eq 9
 def discrete_switching_policy(aoi_forward, aoi_backward, aoi_threshold_forwards, aoi_threshold_backwards):
-      return 1 if (aoi_forward > aoi_threshold_forwards or aoi_backward > aoi_threshold_backwards) else 0
+      return 1 if (aoi_forward >= aoi_threshold_forwards or aoi_backward >= aoi_threshold_backwards) else 0
 
 # theta for eq 10
 def get_theta(aoi_forward, aoi_backward, aoi_threshold_forwards, aoi_threshold_backwards):
@@ -151,7 +155,56 @@ def f_map(theta, aoi_threshold_forward, aoi_threshold_backward):
 
     return sigma_f, sigma_b, zeta
 
-def get_pro
+import scipy.sparse as sp
+import scipy.sparse.linalg as spla
+
+# eq 10: list of A_theta for every chain state
+def build_mjls(aoi_threshold_f, aoi_threshold_b, switching=True):
+    Pi_theta, theta_states = mjls_transition_matrix(p1_f, p0_f, p1_b, p0_b,
+                                                    aoi_threshold_f, aoi_threshold_b)
+    A_list = []
+    for theta in theta_states:
+        sf, sb, zeta = f_map(theta, aoi_threshold_f, aoi_threshold_b)
+        if not switching:
+            zeta = MODE_HUMAN
+        A_list.append(build_mode(sf, sb, zeta)[0])
+    return Pi_theta, A_list
+
+
+def drop_unused_state(A_list, idx=3):
+    """x_c[1] (z index 3) is an integrator nothing reads. It puts an eigenvalue
+    of exactly 1 in every mode, so rho(T) = 1 no matter what. Remove it."""
+    keep = [k for k in range(8) if k != idx]
+    return [A[np.ix_(keep, keep)] for A in A_list]
+
+
+# Theorem 1
+def spectral_radius_T(Pi_theta, A_list):
+    """rho of the second-moment operator. Block (j, i) = Pi[j, i] * kron(A_i, A_i)."""
+    N = len(A_list)
+    n2 = A_list[0].shape[0] ** 2
+    K = [sp.csr_matrix(np.kron(A, A)) for A in A_list]
+    blocks = [[None] * N for _ in range(N)]
+    for j, i in zip(*np.nonzero(Pi_theta)):
+        blocks[j][i] = Pi_theta[j, i] * K[i]
+    for j in range(N):                                  # bmat needs >=1 block per row
+        if all(b is None for b in blocks[j]):
+            blocks[j][j] = sp.csr_matrix((n2, n2))
+    T = sp.bmat(blocks, format="csr")
+    return abs(spla.eigs(T, k=1, which="LM", return_eigenvectors=False)[0])
+
+
+def is_mss(aoi_threshold_f, aoi_threshold_b, switching=True):
+    Pi_theta, A_list = build_mjls(aoi_threshold_f, aoi_threshold_b, switching)
+    rho = spectral_radius_T(Pi_theta, drop_unused_state(A_list))
+    return rho < 1, rho
+    
+# eq 12
+def get_prob(m, n, aoi_transition_matrix):
+    '''
+    P(theta(t+1)=m | theta(t)=n) = Pi_theta[m,n]
+    '''
+    return aoi_transition_matrix[m,n]
 
 # eq 13: one link's AoI transition matrix
 def aoi_transition_matrix(p_stay_success, p_stay_fail, aoi_threshold):
@@ -203,6 +256,8 @@ def mjls_transition_matrix(p1_f, p0_f, p1_b, p0_b,
                     for ab in range(1, aoi_threshold_backward + 1)]
     return Pi_theta, theta_states
 
+
+
 # eq 16
 A_plant = {MODE_HUMAN: np.array([[0.9982, 0.0009463], [-3.666, 0.8926]]),
       MODE_SAFE: np.array([[0.9999, 0.0009658], [-0.1448, 0.9317]])}
@@ -235,5 +290,94 @@ def beta(y, eps=0.05):            # first time within 1 +- eps
 
 # eq 18
 def cost(y_noswitch, y_switch, c0=7, c1=1, eps=0.05):
+    # 
     return c0 * alpha(y_switch) / alpha(y_noswitch) + \
            c1 * (beta(y_switch, eps) / beta(y_noswitch, eps) - 1)
+
+# eq  19 
+# human desired haptic reference - stochastic process reflecting intention for haptic reference in repetitive task
+# eq 19: transition matrix of the human's desired reference
+def human_reference_transition_matrix(N_h, p_stay):
+    '''
+    Pi_h[i, j] = P(h(t) = h_i | h(t-1) = h_j). Columns sum to 1.
+    Repetitive task: stay on the current target, or move to the next one in the cycle.
+               now: h0     h1     h2     h3
+      next h0     [ p00    p01    p02    p03 ]
+      next h1     [ p10    p11    p12    p13 ]
+      next h2     [ p20    p21    p22    p23 ]
+      next h3     [ p30    p31    p32    p33 ]
+    '''
+    Pi_h = np.zeros((N_h, N_h))
+    for j in range(N_h):
+        Pi_h[j, j] = p_stay                  # keep the same target
+        Pi_h[(j + 1) % N_h, j] = 1 - p_stay  # move on to the next target
+    return Pi_h
+
+
+# eq 20
+# J = Expected[sum from 0 to Ns-1 (w0)norm((Cz(z(t)-z*(t)))) + w1 [vector of 1s ] (z(t) in Xc)]
+def evaluation_function(reachable_set, critical_set, z, z_star, length_of_simulation_time, Cz, w0, w1):
+    pass
+
+
+
+def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True):
+    """One random realization. h_seq: reference at each step (length N_s).
+    Returns y(t) = Cz z(t)."""
+    # precompute the 8 possible matrices ONCE (avoid rebuild everytime)
+    modes = {(sf, sb, m): build_mode(sf, sb, m)
+             for sf in (0, 1) for sb in (0, 1) for m in (MODE_HUMAN, MODE_SAFE)}
+
+    z = np.zeros(8) #empty augmented state z(t) = [xp(t)_T xc(t)_T ur(t-1) yl(t-1)]_T
+    sigma_f, sigma_b = 1, 1          # start with both links working
+    aoi_f, aoi_b = 1, 1
+    y = np.zeros(N_s)
+
+    for t in range(N_s):
+        # 1. channel, eq (4): bursty Markov success/failure
+        sigma_f = int(rng.random() < (p1_f if sigma_f else 1 - p0_f))
+        sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
+
+        # 2. AoI, eq (8)
+        aoi_f = aoi(sigma_f, aoi_f)
+        aoi_b = aoi(sigma_b, aoi_b)
+
+        # 3-4. theta and mode, eqs (10)-(11)
+        theta = get_theta(aoi_f, aoi_b, aoi_threshold_f, aoi_threshold_b)
+        sf, sb, zeta = f_map(theta, aoi_threshold_f, aoi_threshold_b)
+        if not switching:
+            zeta = MODE_HUMAN        # baseline: never switch to safe mode
+
+        # 5. state update, eq (10)
+        A, B = modes[(sf, sb, zeta)]
+        y[t] = Cz @ z
+        z = A @ z + B[:, 0] * h_seq[t]
+
+    return y
+
+def mc_step_response(aoi_threshold, N_s=1000, runs=500, switching=True, seed=0):
+    rng = np.random.default_rng(seed)
+    h_seq = np.ones(N_s)                                   # unit step
+    Y = np.array([simulate_run(N_s, h_seq, aoi_threshold, aoi_threshold, rng, switching)
+                  for _ in range(runs)])
+    return Y.mean(axis=0)                                  # ȳ(t), approximately E[Cz z(t)]
+
+def algorithm1(D_range=range(2, 31), runs=500):
+    y_noswitch = mc_step_response(2, switching=False, runs=runs)
+    results = []
+    for D in D_range:
+        stable, rho = is_mss(D, D)
+        y_switch = mc_step_response(D, runs=runs)
+        c = cost(y_noswitch, y_switch)
+        results.append((D, c, rho, stable))
+        print(f"D={D:2d}  cost={c:.3f}  rho={rho:.5f}  {'stable' if stable else 'UNSTABLE'}")
+    feasible = [r for r in results if r[3]]
+    best = min(feasible, key=lambda r: r[1])
+    print("best:", best)
+    return best, results
+
+
+if __name__ == "__main__":
+    print("no switching:", is_mss(16, 16, switching=False))   # expect (False, ~1.0099)
+    print("threshold 16:", is_mss(16, 16))                    # expect (True,  ~0.99965)
+    algorithm1()
