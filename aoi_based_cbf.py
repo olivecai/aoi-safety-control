@@ -29,7 +29,7 @@ A = [[A_p, 0],
      [0,A_p]]
 B = [[B_p, 0],
      [0,B_p]]
-y = [C_p x_x, C_p, x_y]T
+y = [C_p x_x, C_p x_y]T
 
 safe set is R^2 - ||y||^2, R=1
     
@@ -42,60 +42,82 @@ y_(t+1) (u) = [ C_p A_p x_x , C_p A_p x_y ]T + (C_p B_p) u
 ||y_0 + a u||^2 <= R^2 - (1- gamma)(R^2 - ||y_t||^2) 
 
 '''
+import cvxpy as cp
 
 from aoi_based_switching_control_for_safe_haptic_teleoperation_over_a_wireless_network import *
 import numpy as np
 from math import cos, sin
 
+import matplotlib.pyplot as plt
+
 SAFE_SET_RADIUS=1
 SAFE_SET_CENTER= 0 
 SAFE_SET_EPSILON = 1e-2 
-N_s = 1000
+HUMAN_DESIRED_TRAJ_RADIUS = 3
+SAFE_TOLERANCE = 1e-10
+N_s = 5000
 seed = 888
-AOI_THRESHOLD = 16
+AOI_THRESHOLD = 13
 
-def generate_human_reference(N=N_s, radius=SAFE_SET_RADIUS, distance_from_boundary=SAFE_SET_EPSILON):
+def generate_human_reference(N=N_s, radius=HUMAN_DESIRED_TRAJ_RADIUS, distance_from_boundary=SAFE_SET_EPSILON, turns =1):
     '''
     human ref = parameterized curve in R^2, < r(t) cos(t), r(t) sin(t) >
     
     '''
-    varying_radius = np.sin(np.linspace(0,radius,N))
-    h_x = np.zeros((N))
-    h_y = np.zeros((N))
-    for i in range(N):
-        h_x[i] = varying_radius[i]*cos((2*np.pi*i)/N)
-        h_y[i] = varying_radius[i]*sin((2*np.pi*i)/N)
-    return [h_x,h_y]
+    # r = np.linspace(0, radius - distance_from_boundary, N)
+    r = np.array([HUMAN_DESIRED_TRAJ_RADIUS]*N_s)
+    t = np.linspace(0, 2 * np.pi * turns, N)
+    return np.array([r * np.cos(t), r * np.sin(t)])
 
-def unit_circle_cbf():
-    '''
-    u_cbf = argmin over || u_cbf - u ||^2 such that R^2-(y_x_next^2+y_y_next^2) >= (1-gamma)(R^2-(y_x^2+y_y^2))
-    y_x_next = Cp @ x_x_next = Cp @ (Ap x_x_next + Bp u_cbf), u_cbf is a function of u, and u = Cc x_x + Dc (h - y)
-    '''
+def make_unit_circle_cbf():
+    """Build the CBF QP once. Returns a function that solves it for new data."""
+    u_cbf   = cp.Variable(2)                    # [u_x, u_y]
+    u_r = cp.Parameter(2)                   # u_remote, the received command
+    CpApxp  = cp.Parameter(2)                   # C_p A_p x for each axis
+    CpBp   = cp.Parameter()                    # C_p B_p (scalar)
+    rho = cp.Parameter(nonneg=True)
+
+    prob = cp.Problem(objective= cp.Minimize(cp.sum_squares(u_cbf - u_r)),
+                      constraints= [cp.norm(CpApxp + CpBp * u_cbf) <= rho])
+
+    def solve(u_r_val, CpApxp_val, CpBp_val, rho_val):
+        u_r.value, CpApxp.value, CpBp.value, rho.value = u_r_val, CpApxp_val, CpBp_val, rho_val
+        prob.solve(solver=cp.CLARABEL)     
+        if u_cbf.value is None:            
+            return u_r_val, False
+        return u_cbf.value, True
+    return solve
 
 
-def get_u_cbf():
+def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS, gamma=0.1, margin=0.0, safe_tolerance=SAFE_TOLERANCE):
+
     '''
+    the cbf works only on the remote side. use the function 'solve' to perform the cvxpy solve fn
+    '''
+    CpApxp = (Cp @Ap@x_plant).ravel()
+    CpBp = (Cp @ Bp).item()
+    if abs(CpBp) < 1e-16:
+        return u_remote
+    rho=np.sqrt(max((R-margin)**2 - (1-gamma)*((R-margin)**2 - np.sum(y_remote**2)),0))
+    u_cbf, status = solve(u_remote.ravel(), CpApxp, CpBp, rho)
+    return np.asarray(u_cbf).reshape(1,2)
     
-    '''
 
-
-
-def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True):
+def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf):
     """One random realization. h_seq: reference at each step (length N_s).
     Returns y(t) = Cz z(t)."""
     # # precompute the 8 possible matrices ONCE (avoid rebuild everytime)
     # modes = {(sf, sb, m): build_mode(sf, sb, m)
     #          for sf in (0, 1) for sb in (0, 1) for m in (MODE_HUMAN, MODE_SAFE)}
 
+    solve = cbf()
     z = np.zeros(8) #empty augmented state z(t) = [Xp(t)_T Xc(t)_T Ur(t-1) Yl(t-1)]_T
     sigma_f, sigma_b = 1, 1          # start with both links working
     aoi_f, aoi_b = 1, 1
-    y_x = np.zeros(N_s)
-    y_y = np.zeros(N_s)
+    tracked_y_remote = np.zeros((2, N_s)) #for position in x and y
 
     ##### INITIAL STATE #####
-    zeta=0
+    zeta=MODE_HUMAN
     Cp = C_plant[zeta]
     Ap = A_plant[zeta]
     Bp = B_plant[zeta]
@@ -104,11 +126,18 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
     Bc = B_controller[zeta]
     Dc = D_controller[zeta]
 
-    x_plant = np.array([[0],[1]]) # stationary 
+    x_plant = np.zeros((2, 2))  # stationary 
+    x_controller = np.zeros((4, 2))#now we have two DOFs
+    
+    h = h_seq[:,0]
+    # print("h:" , h)
+    # print(h.shape)
     y_remote = Cp @ x_plant
-    y_local = y_remote # because inthe beginning the aoi is 1
+    y_local = y_remote # because in the beginning the aoi is 1
     u_local = Cc @ x_controller + Dc @ ( h - y_local)
     u_remote = u_local # because in the beginning aoi is 1
+
+    # print(f"Initial State:\n{x_plant}")
 
 
     for t in range(N_s):
@@ -116,7 +145,7 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
         sigma_f = int(rng.random() < (p1_f if sigma_f else 1 - p0_f))
         sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
 
-        # 2. AoI, eq (8)
+        # 2. AoI, eq (8)-
         aoi_f = aoi(sigma_f, aoi_f)
         aoi_b = aoi(sigma_b, aoi_b)
 
@@ -140,33 +169,45 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
         Bc = B_controller[zeta]
         Dc = D_controller[zeta]
 
-        h = h_seq[t]
-
-        # system potential update
-        x_plant = Ap @ x_plant + Bp @ u_remote
+        h = h_seq[:,t]
+        if cbf_mode:
+            ### here we add in the control barrier function!!
+            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote)
+            x_plant = Ap @ x_plant + Bp @ u_cbf #safe
+        else:
+            x_plant = Ap @ x_plant + Bp @ u_remote #safe
+          
         y_remote = Cp @ x_plant
         y_local = y_remote if sigma_b else y_local #update y_local (local feedback controller side) if the backwards link worked
+        
+        # print("y_local", y_local)
+        # print("h", h)
+        # print(h-y_local)
+
+        tracked_y_remote[:,t] = y_remote.ravel()
+
         x_controller = Ac @ x_controller + Bc @ (h - y_local)
         u_local = Cc @ x_controller + Dc @ ( h - y_local)
         u_remote = u_local if sigma_f else u_remote # update u_remote (remote command on plant side) if the forwards link worked
-        
-        
-        x_x = Ap@x_x + Bp @u
-        u = Cp @ x
-        u_cbf = get_u_cbf()
-        
-        
+     
 
-        z = A @ z + B[:, 0] * h_seq[t]
-
-
-
-    return y
+    return tracked_y_remote
 
 
 
 rng = np.random.default_rng(seed)
-h_seq = np.ones(N_s)                               
-switching = 0
-Y = simulate_run(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching)
+h_seq = generate_human_reference()                              
+switching = 1
+cbf_mode=1
+Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode)
+
+print("Y")
 print(Y)
+
+print("h_seq")
+print(h_seq)
+plt.plot(Y[0], Y[1], label = "robot output y")
+plt.plot(h_seq[0], h_seq[1], label = "desired trajectry h")
+plt.title("Robot Trajectory vs Desired in R^2")
+plt.legend()
+plt.show()
