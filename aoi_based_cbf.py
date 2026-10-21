@@ -50,7 +50,7 @@ from math import cos, sin
 
 import matplotlib.pyplot as plt
 
-SAFE_SET_RADIUS=1
+SAFE_SET_RADIUS=1.0
 SAFE_SET_CENTER= 0 
 SAFE_SET_EPSILON = 1e-2 
 HUMAN_DESIRED_TRAJ_RADIUS = 1.5
@@ -210,8 +210,8 @@ switching = 1
 cbf_mode=1
 Ys=[]
 Ys_names=[]
-for i in [0]:
-    for j in [1]:
+for i in [0,1]:
+    for j in [0,1]:
         switching = i
         cbf_mode = j
         rng = np.random.default_rng(RNG_SEED)
@@ -224,7 +224,7 @@ print("h_seq")
 print(h_seq)
 for i in range(0,len(Ys)):
     Y=Ys[i]
-    plt.plot(Y[0], Y[1], label = f"actual trajectory y - {Ys_names[i]}")
+    plt.plot(Y[0], Y[1], label = f"actual trajectory y - {Ys_names[i]}", alpha=0.5)
 plt.plot(h_seq[0], h_seq[1], label = "desired trajectry h")
 plt.plot(SAFE_SET_RADIUS*np.cos(np.linspace(0,2*np.pi)-SAFE_SET_CENTER), SAFE_SET_RADIUS*np.sin(np.linspace(0,2*np.pi)-SAFE_SET_CENTER), label='safe set', alpha=0.3)
 plt.title("Robot Trajectory vs Desired in R^2")
