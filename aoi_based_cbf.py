@@ -70,7 +70,9 @@ def generate_human_reference(N=N_s, radius=HUMAN_DESIRED_TRAJ_RADIUS, distance_f
     return np.array([r * np.cos(t), r * np.sin(t)])
 
 def make_unit_circle_cbf():
-    """Build the CBF QP once. Returns a function that solves it for new data."""
+    '''
+    ret cbf fn
+    '''
     u_cbf   = cp.Variable(2)                    # [u_x, u_y]
     u_r = cp.Parameter(2)                   # u_remote, the received command
     CpApxp  = cp.Parameter(2)                   # C_p A_p x for each axis
@@ -104,8 +106,12 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS,
     
 
 def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf, seed=RNG_SEED):
-    """One random realization. h_seq: reference at each step (length N_s).
-    Returns y(t) = Cz z(t)."""
+    '''
+    pass in a trajecotry h_seq for 2 dof system 
+    set switching and cbf_mode
+
+    then run simulation and get Y, the actual output trajectory
+    '''
     # # precompute the 8 possible matrices ONCE (avoid rebuild everytime)
     # modes = {(sf, sb, m): build_mode(sf, sb, m)
     #          for sf in (0, 1) for sb in (0, 1) for m in (MODE_HUMAN, MODE_SAFE)}
