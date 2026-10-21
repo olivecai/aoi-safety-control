@@ -53,10 +53,10 @@ import matplotlib.pyplot as plt
 SAFE_SET_RADIUS=1
 SAFE_SET_CENTER= 0 
 SAFE_SET_EPSILON = 1e-2 
-HUMAN_DESIRED_TRAJ_RADIUS = 3
+HUMAN_DESIRED_TRAJ_RADIUS = 1.5
 SAFE_TOLERANCE = 1e-10
-N_s = 5000
-seed = 888
+N_s = 4000
+RNG_SEED = 888
 AOI_THRESHOLD = 13
 
 def generate_human_reference(N=N_s, radius=HUMAN_DESIRED_TRAJ_RADIUS, distance_from_boundary=SAFE_SET_EPSILON, turns =1):
@@ -64,8 +64,8 @@ def generate_human_reference(N=N_s, radius=HUMAN_DESIRED_TRAJ_RADIUS, distance_f
     human ref = parameterized curve in R^2, < r(t) cos(t), r(t) sin(t) >
     
     '''
-    # r = np.linspace(0, radius - distance_from_boundary, N)
-    r = np.array([HUMAN_DESIRED_TRAJ_RADIUS]*N_s)
+    r = np.linspace(0, radius - distance_from_boundary, N)
+    # r = np.array([HUMAN_DESIRED_TRAJ_RADIUS]*N_s)
     t = np.linspace(0, 2 * np.pi * turns, N)
     return np.array([r * np.cos(t), r * np.sin(t)])
 
@@ -103,7 +103,7 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS,
     return np.asarray(u_cbf).reshape(1,2)
     
 
-def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf):
+def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf, seed=RNG_SEED):
     """One random realization. h_seq: reference at each step (length N_s).
     Returns y(t) = Cz z(t)."""
     # # precompute the 8 possible matrices ONCE (avoid rebuild everytime)
@@ -126,11 +126,14 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
     Bc = B_controller[zeta]
     Dc = D_controller[zeta]
 
-    x_plant = np.zeros((2, 2))  # stationary 
     x_controller = np.zeros((4, 2))#now we have two DOFs
+    x_plant = np.zeros((2, 2))  # stationary 
     
     h = h_seq[:,0]
+    x_plant[0, :] = h / Cp[0, 0]    # y = 15 p  =>  p = h/15
     # print("h:" , h)
+    # print(x_plant)
+    # exit()
     # print(h.shape)
     y_remote = Cp @ x_plant
     y_local = y_remote # because in the beginning the aoi is 1
@@ -195,19 +198,29 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
 
 
 
-rng = np.random.default_rng(seed)
+
 h_seq = generate_human_reference()                              
 switching = 1
 cbf_mode=1
-Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode)
-
-print("Y")
-print(Y)
+Ys=[]
+Ys_names=[]
+for i in [0]:
+    for j in [1]:
+        switching = i
+        cbf_mode = j
+        rng = np.random.default_rng(RNG_SEED)
+        Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode)
+        Ys.append(Y)
+        name = f"actual trajectory [switching={switching}] [cbf_mode={cbf_mode}]"
+        Ys_names.append(name)
 
 print("h_seq")
 print(h_seq)
-plt.plot(Y[0], Y[1], label = "robot output y")
+for i in range(0,len(Ys)):
+    Y=Ys[i]
+    plt.plot(Y[0], Y[1], label = f"actual trajectory y - {Ys_names[i]}")
 plt.plot(h_seq[0], h_seq[1], label = "desired trajectry h")
+plt.plot(SAFE_SET_RADIUS*np.cos(np.linspace(0,2*np.pi)-SAFE_SET_CENTER), SAFE_SET_RADIUS*np.sin(np.linspace(0,2*np.pi)-SAFE_SET_CENTER), label='safe set', alpha=0.3)
 plt.title("Robot Trajectory vs Desired in R^2")
 plt.legend()
 plt.show()
