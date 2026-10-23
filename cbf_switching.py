@@ -1,45 +1,5 @@
 '''
-to what extent does AOI help for the CBF?
-
-we will build a CBF based on AOI in our system which experiences delays.
-in both cases the cbf is able to act immediately and is on the remote plant side.
-the only difference is that in CBF_AOI, the safe set becomes smaller when AOI increases.
-
-suppose the CBF regulates position and velocity.
-
-In our simulation, have AOI maximum age be around 16 to ensure it doesnt completely go off the rails
-
-System matrices
-
-in CBF_BASE 
-in CBF_AOI 
-
-two degree of freedom, x and y
-live in x-y plane: we are going to start off the system at position 0,0,
-and we claim the safe set is a convex polygon or disc (supppose just the unit circle D with radius 1, center 0)
-then the command (our human desired intention) h is the parameterized curve (rcost, rsint) and t loops through [0,2pi] and r through (0,1) every ms with a speed h_v (human desire velocity). what we get is a continuously moving spiral.
-
-generate the state of x_x and x_y:
-x_x = [p_x, v_x]
-x_y = [p_y, y_y]
-
-X = [ x_x, x_y ]T
-u = [u_x, u_y]T
-A = [[A_p, 0],
-     [0,A_p]]
-B = [[B_p, 0],
-     [0,B_p]]
-y = [C_p x_x, C_p x_y]T
-
-safe set is R^2 - ||y||^2, R=1
-    
-
-CBF_BASE:
-u_cbf = mininize over safe u_cbf in D ||u_cbf-u||^2 such that cbf(u_cbf) > 0   
-
-y_(t+1) (u) = [ C_p A_p x_x , C_p A_p x_y ]T + (C_p B_p) u
-
-||y_0 + a u||^2 <= R^2 - (1- gamma)(R^2 - ||y_t||^2) 
+unit circle CBF regulates position and velocity 
 
 '''
 import cvxpy as cp
