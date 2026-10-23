@@ -57,7 +57,7 @@ HUMAN_DESIRED_TRAJ_RADIUS = 1.5
 SAFE_TOLERANCE = 1e-10
 N_s = 4000
 RNG_SEED = 888
-AOI_THRESHOLD = 13
+AOI_THRESHOLD = 10
 
 USE_NO_CBF=0
 USE_STANDARD_CBF=1
@@ -132,14 +132,19 @@ def make_unit_circle_cbf_with_velocity_penalization_for_high_aoi():
     # get just the position
     pos_Apxp  = cp.Parameter(2)                   # [1 0] A_p x for each axis
     pos_Bp   = cp.Parameter()                    # [1 0] B_p (scalar)
+
+    CpApxp  = cp.Parameter(2)                   # Cp A_p x for each axis
+    CpBp   = cp.Parameter()                    # Cp B_p (scalar)
     
     rho_vel = cp.Parameter(nonneg=True)
     rho_pos = cp.Parameter(nonneg=True)
+    # rho = cp.Parameter(nonneg=True)
 
 
     prob = cp.Problem(objective= cp.Minimize(cp.sum_squares(u_cbf - u_r)),
                       constraints= [cp.norm((vel_Apxp + vel_Bp * u_cbf)) <= rho_vel,
-                                   cp.norm((pos_Apxp + pos_Bp * u_cbf)) <= rho_pos,
+                                   cp.norm((pos_Apxp + pos_Bp * u_cbf)) <= rho_pos
+                                #    cp.norm((CpApxp + CpBp*u_cbf)) <=rho                                   
                                    ])
 
     def solve(u_r_val, vel_Apxp_val, vel_Bp_val, rho_vel_val, pos_Apxp_val, pos_Bp_val, rho_pos_val):
@@ -190,7 +195,7 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
 
     # gamma now a function of current_aoi, everything else is just a const:
     m_vel = 1 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
-    bd_lower, bd_upper = gamma, 1
+    bd_lower, bd_upper = gamma, 1.0
     velocity_cbf_shift = AOI_THRESHOLD
     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(-m_vel*(current_aoi-(velocity_cbf_shift))))
     print("gamma_velocity", gamma_velocity)
@@ -290,7 +295,7 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
             u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote)
             x_plant = Ap @ x_plant + Bp @ u_cbf #safe
         elif cbf_mode == USE_AOI_CBF:
-            u_cbf = get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote)
+            u_cbf = get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f))
             x_plant = Ap @ x_plant + Bp @ u_cbf #safe
         else:
             x_plant = Ap @ x_plant + Bp @ u_remote #safe
