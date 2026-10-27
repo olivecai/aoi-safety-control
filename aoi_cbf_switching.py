@@ -173,37 +173,52 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
     - if current aoi goes to 1 every time, then the cbf must behave just like the 
     '''
 
-    CpApxp = (Cp @Ap@x_plant).ravel()
+    Cp_pos = np.array([Cp.ravel()[0], 0.0])
+    Cp_vel = np.array([0.0, Cp.ravel()[1]])
+    assert np.allclose(Cp_pos + Cp_vel, Cp.ravel())
 
-    vel_Apxp_val = (np.array([0,1]) @Ap@x_plant).ravel()
-    vel_Bp_val = (np.array([0,1]) @Bp).item()
+    vel_Apxp_val = (Cp_vel @ Ap @ x_plant).ravel()
+    vel_Bp_val   = (Cp_vel @ Bp).item()
+    pos_Apxp_val = (Cp_pos @ Ap @ x_plant).ravel()
+    pos_Bp_val   = (Cp_pos @ Bp).item()
 
-    
-    pos_Apxp_val = (np.array([1,0]) @Ap@x_plant).ravel()
-    pos_Bp_val = (np.array([1,0]) @Bp).item()
-
-    CpBp = (Cp @ Bp).item()
     # print(CpApxp.shape)
     # print(pos_Apxp_val.shape)
-    # print(pos_Bp_val)
-    # print(CpBp)
-
-    if abs(CpBp) < 1e-16:
+    print("@@@")
+    print(pos_Bp_val)
+    print(vel_Bp_val)
+    print(Cp@Bp)
+    dangerous = np.min((pos_Apxp_val,vel_Apxp_val))
+    if abs(dangerous) < 1e-16:
         return u_remote
 
-    
 
     # gamma now a function of current_aoi, everything else is just a const:
     m_vel = 1 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
-    bd_lower, bd_upper = gamma, 1.0
+    bd_lower, bd_upper = 0, gamma
     velocity_cbf_shift = AOI_THRESHOLD
-    gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(-m_vel*(current_aoi-(velocity_cbf_shift))))
+    gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
+
+    # we want to see the gammaa function
+    # plot_x = np.linspace(0,30,50)
+    # plot_y = np.zeros(plot_x.shape)
+    # for i in range(len(plot_x)):
+    #     current_aoi = plot_x[i]
+    #     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
+    #     plot_y[i] = gamma_velocity
+        
+    # plt.plot(plot_x,plot_y)
+    # plt.show()
+
     print("gamma_velocity", gamma_velocity)
+    gamma_velocity=0.1
     rho_vel_val=np.sqrt(max((R-margin)**2 - (1-gamma_velocity)*((R-margin)**2 - np.sum(y_remote**2)),0))
 
+
     m_pos = 1
-    gamma_position = bd_lower + (bd_upper-bd_lower)/(1+np.e**(-m_pos*(current_aoi-AOI_THRESHOLD)))
+    gamma_position = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_pos*(current_aoi-AOI_THRESHOLD)))
     print("gamma_position", gamma_position)
+    gamma_position=0.1
 
     rho_pos_val = np.sqrt(max((R-margin)**2 - (1-gamma_position)*((R-margin)**2 - np.sum(y_remote**2)),0))
 
@@ -256,6 +271,7 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
     y_local = y_remote # because in the beginning the aoi is 1
     u_local = Cc @ x_controller + Dc @ ( h - y_local)
     u_remote = u_local # because in the beginning aoi is 1
+ 
 
     # print(f"Initial State:\n{x_plant}")
 
