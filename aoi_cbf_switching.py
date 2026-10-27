@@ -263,7 +263,7 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
     s = 1/(1+np.exp(-0.1*(current_aoi - AOI_THRESHOLD)))   # 0 at low AOI, 1 at high AOI
     k=0.3
     # R = R * (1 - k*s)                                  # e.g. k = 0.3
-    V = V * (1 - k*s)
+    # V = V * (1 - k*s)
     print("R,V:", R,V)
     CpApxp = (Cp @ Ap @ x_plant).ravel(); CpBp = (Cp @ Bp).item()
     if abs(CpBp) < 1e-16: return u_remote          # restore the original guard
@@ -274,7 +274,6 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
 
     rho_val     = np.sqrt(max(R**2 - (1-gamma_position)*(R**2 - np.sum(y_remote**2)), 0))
     rho_vel_val = np.sqrt(max(V**2 - (1-gamma_velocity)*(V**2 - np.sum(y_vel_now**2)), 0))
-
     
     u_r_val = u_remote.ravel()
     
