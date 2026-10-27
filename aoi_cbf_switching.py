@@ -105,7 +105,8 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS,
     if abs(CpBp) < 1e-16:
         return u_remote
     rho=np.sqrt(max((R-margin)**2 - (1-gamma)*((R-margin)**2 - np.sum(y_remote**2)),0))
-    u_cbf, status = solve(u_remote.ravel(), CpApxp, CpBp, rho)
+    u_cbf, s = solve(u_remote.ravel(), CpApxp, CpBp, rho)
+    print("solved u_cbf, s:", u_cbf, s)
     return np.asarray(u_cbf).reshape(1,2)
 
 def make_unit_circle_cbf_with_velocity_penalization_for_high_aoi():
@@ -173,8 +174,11 @@ def make_cbf_aoi():
     def solve(u_r_val, CpApxp_val, CpBp_val, rho_val, vel_Apxp_val, vel_Bp_val, rho_vel_val): 
         u_r.value, CpApxp.value, CpBp.value, rho.value = u_r_val, CpApxp_val, CpBp_val, rho_val 
         vel_Apxp.value, vel_Bp.value, rho_vel.value = vel_Apxp_val, vel_Bp_val, rho_vel_val 
+        # print(vel_Apxp.value, vel_Bp.value, rho_vel.value)
+        print("v")
+        print(np.linalg.norm(vel_Apxp.value + vel_Bp.value*u_r.value))
         
-        prob.solve(solver=cp.CLARABEL) 
+        prob.solve(solver=cp.CLARABEL, verbose=True) 
         
         # Check if the optimization problem failed to find a feasible solution
         if prob.status in [cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE]:
@@ -184,7 +188,8 @@ def make_cbf_aoi():
         if u_cbf.value is None:
             raise ValueError(f"Optimization failed with status: {prob.status}")
 
-        return u_cbf.value, True
+
+        return u_cbf.value, slack.value
 
     return solve
 
@@ -254,7 +259,12 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
     # rho_pos_val = np.sqrt(max((R-margin)**2 - (1-gamma_position)*((R-margin)**2 - np.sum(y_remote**2)),0))
 
     # gamma = ((np.arctan(m(current_aoi-AOI_THRESHOLD)))/np.pi) + .5
-    V = 0.01
+    V=0.01
+    s = 1/(1+np.exp(-0.1*(current_aoi - AOI_THRESHOLD)))   # 0 at low AOI, 1 at high AOI
+    k=0.3
+    # R = R * (1 - k*s)                                  # e.g. k = 0.3
+    V = V * (1 - k*s)
+    print("R,V:", R,V)
     CpApxp = (Cp @ Ap @ x_plant).ravel(); CpBp = (Cp @ Bp).item()
     if abs(CpBp) < 1e-16: return u_remote          # restore the original guard
 
@@ -268,7 +278,14 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
     
     u_r_val = u_remote.ravel()
     
-    u_cbf, status = solve(u_r_val, CpApxp, CpBp, rho_val, vel_Apxp_val, vel_Bp_val, rho_vel_val) #, pos_Apxp_val, pos_Bp_val, rho_pos_val)
+    u_cbf, s = solve(u_r_val, CpApxp, CpBp, rho_val, vel_Apxp_val, vel_Bp_val, rho_vel_val) #, pos_Apxp_val, pos_Bp_val, rho_pos_val)
+    print("aoi, solved u_cbf, s:", current_aoi, u_cbf, s)
+
+
+    vel_next = np.linalg.norm(vel_Apxp_val + vel_Bp_val * u_cbf.ravel())
+    print(f"aoi={current_aoi} vel_next={vel_next:.4f} rho_vel={rho_vel_val:.4f} "f"|u_cbf-u_r|={np.linalg.norm(u_cbf.ravel()-u_r_val):.4f}")
+
+
     return np.asarray(u_cbf).reshape(1,2)
     
 
@@ -383,8 +400,8 @@ switching = 1
 cbf_mode=1
 Ys=[]
 Ys_names=[]
-for i in [0,1]:
-    for j in [USE_STANDARD_CBF,USE_AOI_CBF]:
+for i in [0]:
+    for j in [USE_AOI_CBF]:
         switching = i
         cbf_mode = j
         print(cbf_mode, switching)
