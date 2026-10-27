@@ -230,7 +230,7 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
     #     return u_remote
   
     # gamma now a function of current_aoi, everything else is just a const:
-    m_vel = 1 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
+    m_vel = 1e-2 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
     bd_lower, bd_upper = 0, gamma
     velocity_cbf_shift = AOI_THRESHOLD
     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
@@ -260,10 +260,10 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
 
     # gamma = ((np.arctan(m(current_aoi-AOI_THRESHOLD)))/np.pi) + .5
     V=0.01
-    s = 1/(1+np.exp(-0.1*(current_aoi - AOI_THRESHOLD)))   # 0 at low AOI, 1 at high AOI
-    k=0.3
+    s = 1/(1+np.exp(-1e-4*(current_aoi - AOI_THRESHOLD)))   # 0 at low AOI, 1 at high AOI
+    k=1.0
     # R = R * (1 - k*s)                                  # e.g. k = 0.3
-    # V = V * (1 - k*s)
+    V = V * (1 - k*s)
     print("R,V:", R,V)
     CpApxp = (Cp @ Ap @ x_plant).ravel(); CpBp = (Cp @ Bp).item()
     if abs(CpBp) < 1e-16: return u_remote          # restore the original guard
@@ -282,6 +282,7 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
 
 
     vel_next = np.linalg.norm(vel_Apxp_val + vel_Bp_val * u_cbf.ravel())
+
     print(f"aoi={current_aoi} vel_next={vel_next:.4f} rho_vel={rho_vel_val:.4f} "f"|u_cbf-u_r|={np.linalg.norm(u_cbf.ravel()-u_r_val):.4f}")
 
 
