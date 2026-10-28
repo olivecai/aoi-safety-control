@@ -58,6 +58,7 @@ SAFE_TOLERANCE = 1e-10
 N_s = 4000
 RNG_SEED = 888
 AOI_THRESHOLD = 10
+AOI_CAP = 100
 
 USE_NO_CBF=0
 USE_STANDARD_CBF=1
@@ -95,7 +96,7 @@ def make_unit_circle_cbf():
     return solve
 
 
-def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS, gamma=0.1, margin=0.0, safe_tolerance=SAFE_TOLERANCE):
+def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS, gamma=0.1, margin=0.0, safe_tolerance=SAFE_TOLERANCE, current_aoi=1):
 
     '''
     the cbf works only on the remote side. use the function 'solve' to perform the cvxpy solve fn
@@ -104,13 +105,22 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS,
     CpBp = (Cp @ Bp).item()
     if abs(CpBp) < 1e-16:
         return u_remote
-    rho=np.sqrt(max((R-margin)**2 - (1-gamma)*((R-margin)**2 - np.sum(y_remote**2)),0))
+
+    m_vel = 0.5 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
+    bd_lower, bd_upper = 0, gamma
+    velocity_cbf_shift = AOI_THRESHOLD
+    gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
+    print("GAMMA VEL:", gamma_velocity, "AOI:", current_aoi)
+    
+    rho=np.sqrt(max((R-margin)**2 - (1-gamma_velocity)*((R-margin)**2 - np.sum(y_remote**2)),0))
     u_cbf, s = solve(u_remote.ravel(), CpApxp, CpBp, rho)
     print("solved u_cbf, s:", u_cbf, s)
     return np.asarray(u_cbf).reshape(1,2)
 
 def make_unit_circle_cbf_with_velocity_penalization_for_high_aoi():
     '''
+    Oct 28: two hard constraints, this didnt work well and instead gave lots of infeasible solutions
+
     idea on making the CBF AOI dependent: when the aoi is higher, subject the velocity term of the x status to a much higher penalization.
     
     in the paper, they switch from human to safe mode upon an AOI threshold (POINT OF INTEREST 1) and they also regulate velocity in safe mode instead of position (POINT OF INTEREST 2)
@@ -178,7 +188,7 @@ def make_cbf_aoi():
         print("v")
         print(np.linalg.norm(vel_Apxp.value + vel_Bp.value*u_r.value))
         
-        prob.solve(solver=cp.CLARABEL, verbose=True) 
+        prob.solve(solver=cp.CLARABEL, verbose=False) 
         
         # Check if the optimization problem failed to find a feasible solution
         if prob.status in [cp.INFEASIBLE, cp.INFEASIBLE_INACCURATE]:
@@ -193,7 +203,7 @@ def make_cbf_aoi():
 
     return solve
 
-def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS, gamma=0.1, margin=0.0, safe_tolerance=SAFE_TOLERANCE, current_aoi=1):
+def get_u_cbf_aoi_velocity_penalization_for_slack(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS, gamma=0.1, margin=0.0, safe_tolerance=SAFE_TOLERANCE, current_aoi=1):
     '''
     for each DOF, split position from velocity: 
         Y = [[position_x, velocity_x], # dof 1
@@ -230,7 +240,7 @@ def get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RAD
     #     return u_remote
   
     # gamma now a function of current_aoi, everything else is just a const:
-    m_vel = 1e-2 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
+    m_vel = 0.5 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
     bd_lower, bd_upper = 0, gamma
     velocity_cbf_shift = AOI_THRESHOLD
     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
@@ -342,8 +352,8 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
         sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
 
         # 2. AoI, eq (8)-
-        aoi_f = aoi(sigma_f, aoi_f)
-        aoi_b = aoi(sigma_b, aoi_b)
+        aoi_f = aoi(sigma_f, aoi_f, AOI_CAP)
+        aoi_b = aoi(sigma_b, aoi_b, AOI_CAP)
 
         # 3-4. theta and mode, eqs (10)-(11)
         theta = get_theta(aoi_f, aoi_b, aoi_threshold_f, aoi_threshold_b)
@@ -366,12 +376,14 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
         Dc = D_controller[zeta]
 
         h = h_seq[:,t]
-        if cbf_mode == USE_STANDARD_CBF:
-            ### here we add in the control barrier function!!
-            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote)
-            x_plant = Ap @ x_plant + Bp @ u_cbf #safe
+        if cbf_mode == USE_STANDARD_CBF: # no aoi
+            get_cbf_function = get_u_cbf
         elif cbf_mode == USE_AOI_CBF:
-            u_cbf = get_u_cbf_aoi(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f))
+            get_cbf_function = get_u_cbf_aoi_velocity_penalization_for_slack
+        
+
+        if cbf_mode !=0:
+            u_cbf = get_cbf_function(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f))
             x_plant = Ap @ x_plant + Bp @ u_cbf #safe
         else:
             x_plant = Ap @ x_plant + Bp @ u_remote #safe
@@ -400,17 +412,19 @@ switching = 1
 cbf_mode=1
 Ys=[]
 Ys_names=[]
-for i in [0]:
-    for j in [USE_AOI_CBF]:
-        switching = i
-        cbf_mode = j
-        print(cbf_mode, switching)
-        rng = np.random.default_rng(RNG_SEED)
-        cbf = None if j==USE_NO_CBF else (make_cbf_aoi if j==USE_AOI_CBF else make_unit_circle_cbf)
-        Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode, cbf=cbf)
-        Ys.append(Y)
-        name = f"actual trajectory [switching={switching}] [cbf_mode={cbf_mode}]"
-        Ys_names.append(name)
+for k in [0,1]:
+    for i in [0]:
+        for j in [USE_AOI_CBF, USE_STANDARD_CBF]:
+            AOI_CAP=1 if k==0 else 100
+            switching = i
+            cbf_mode = j
+            print(cbf_mode, switching)
+            rng = np.random.default_rng(RNG_SEED)
+            cbf = None if j==USE_NO_CBF else (make_cbf_aoi if j==USE_AOI_CBF else make_unit_circle_cbf)
+            Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode, cbf=cbf)
+            Ys.append(Y)
+            name = f"actual trajectory [delay_added={k}] [switching={switching}] [cbf_mode={cbf_mode}]"
+            Ys_names.append(name)
 
 print("h_seq")
 print(h_seq)

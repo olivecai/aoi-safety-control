@@ -14,6 +14,8 @@ p1_b, p0_b = 0.93, 0.91   # backward: stay-success, stay-failure
 
 Cz = np.array([15.0, 0.05, 0, 0, 0, 0, 0, 0])
 
+AOI_CAP = 100
+
 # N_s := length of simulation
 
 #eq 1 
@@ -124,8 +126,8 @@ def build_mode(sf, sb, m):
     return A, B
 
 # eq 8
-def aoi(link_status, aoi):
-    return 1 if link_status else aoi+1 
+def aoi(link_status, aoi, AOI_CAP=AOI_CAP):
+    return 1 if link_status else min(aoi+1, AOI_CAP)
 
 # eq 9
 def discrete_switching_policy(aoi_forward, aoi_backward, aoi_threshold_forwards, aoi_threshold_backwards):
@@ -339,8 +341,8 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=Tr
         sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
 
         # 2. AoI, eq (8)
-        aoi_f = aoi(sigma_f, aoi_f)
-        aoi_b = aoi(sigma_b, aoi_b)
+        aoi_f = aoi(sigma_f, aoi_f, AOI_CAP)
+        aoi_b = aoi(sigma_b, aoi_b, AOI_CAP)
 
         # 3-4. theta and mode, eqs (10)-(11)
         theta = get_theta(aoi_f, aoi_b, aoi_threshold_f, aoi_threshold_b)
