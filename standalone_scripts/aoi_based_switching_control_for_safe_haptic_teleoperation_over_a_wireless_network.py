@@ -353,7 +353,7 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=Tr
         # 5. state update, eq (10)
         A, B = modes[(sf, sb, zeta)]
         y[t] = Cz @ z
-        z = A @ z + B[:, 0] * h_seq[t]
+        z = A @ z + B[:, 0] * h_seq[:,t]
 
     return y
 

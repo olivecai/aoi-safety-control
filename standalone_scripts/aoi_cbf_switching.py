@@ -106,12 +106,12 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, R=SAFE_SET_RADIUS,
     if abs(CpBp) < 1e-16:
         return u_remote
 
-    m_vel = 0.5 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
-    bd_lower, bd_upper = 0, gamma
+    m_vel = 1e-1 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
+    bd_lower, bd_upper = 0, gamma/5
     velocity_cbf_shift = AOI_THRESHOLD
     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
     print("GAMMA VEL:", gamma_velocity, "AOI:", current_aoi)
-    
+    # gamma_velocity=0.1
     rho=np.sqrt(max((R-margin)**2 - (1-gamma_velocity)*((R-margin)**2 - np.sum(y_remote**2)),0))
     u_cbf, s = solve(u_remote.ravel(), CpApxp, CpBp, rho)
     print("solved u_cbf, s:", u_cbf, s)
@@ -240,13 +240,13 @@ def get_u_cbf_aoi_velocity_penalization_for_slack(solve, x_plant, u_remote, Ap, 
     #     return u_remote
   
     # gamma now a function of current_aoi, everything else is just a const:
-    m_vel = 0.5 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
-    bd_lower, bd_upper = 0, gamma
+    m_vel = 0.1 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
+    bd_lower, bd_upper = 0, gamma/5
     velocity_cbf_shift = AOI_THRESHOLD
     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
 
-    # we want to see the gammaa function
-    # plot_x = np.linspace(0,30,50)
+    # # we want to see the gammaa function
+    # plot_x = np.linspace(0,100,200)
     # plot_y = np.zeros(plot_x.shape)
     # for i in range(len(plot_x)):
     #     current_aoi = plot_x[i]
@@ -300,7 +300,7 @@ def get_u_cbf_aoi_velocity_penalization_for_slack(solve, x_plant, u_remote, Ap, 
     
 
 
-def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf_with_velocity_penalization_for_high_aoi, seed=RNG_SEED):
+def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf_with_velocity_penalization_for_high_aoi, seed=RNG_SEED, lossless=True):
     '''
     pass in a trajecotry h_seq for 2 dof system 
     set switching and cbf_mode
@@ -310,8 +310,8 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
     # # precompute the 8 possible matrices ONCE (avoid rebuild everytime)
     # modes = {(sf, sb, m): build_mode(sf, sb, m)
     #          for sf in (0, 1) for sb in (0, 1) for m in (MODE_HUMAN, MODE_SAFE)}
-
-    solve = cbf()
+    if cbf_mode:
+        solve = cbf()
     z = np.zeros(8) #empty augmented state z(t) = [Xp(t)_T Xc(t)_T Ur(t-1) Yl(t-1)]_T
     sigma_f, sigma_b = 1, 1          # start with both links working
     aoi_f, aoi_b = 1, 1
@@ -348,12 +348,16 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
 
     for t in range(N_s):
         # 1. channel, eq (4): bursty Markov success/failure
-        sigma_f = int(rng.random() < (p1_f if sigma_f else 1 - p0_f))
-        sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
+        if lossless:
+            sigma_f = sigma_b = 1
+        else:
+            sigma_f = int(rng.random() < (p1_f if sigma_f else 1 - p0_f))
+            sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
 
-        # 2. AoI, eq (8)-
+  
         aoi_f = aoi(sigma_f, aoi_f, AOI_CAP)
         aoi_b = aoi(sigma_b, aoi_b, AOI_CAP)
+    
 
         # 3-4. theta and mode, eqs (10)-(11)
         theta = get_theta(aoi_f, aoi_b, aoi_threshold_f, aoi_threshold_b)
@@ -412,16 +416,18 @@ switching = 1
 cbf_mode=1
 Ys=[]
 Ys_names=[]
-for k in [0,1]:
+for k in [1]:
     for i in [0]:
         for j in [USE_AOI_CBF, USE_STANDARD_CBF]:
-            AOI_CAP=1 if k==0 else 100
+            lossless=False if k==1 else True
             switching = i
             cbf_mode = j
             print(cbf_mode, switching)
             rng = np.random.default_rng(RNG_SEED)
             cbf = None if j==USE_NO_CBF else (make_cbf_aoi if j==USE_AOI_CBF else make_unit_circle_cbf)
-            Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode, cbf=cbf)
+           
+            Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode, cbf=cbf, lossless=lossless)
+   
             Ys.append(Y)
             name = f"actual trajectory [delay_added={k}] [switching={switching}] [cbf_mode={cbf_mode}]"
             Ys_names.append(name)
