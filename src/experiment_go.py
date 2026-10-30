@@ -24,7 +24,7 @@ USE_STANDARD_CBF=1
 USE_AOI_CBF=2
 USE_AOI_VEL_CBF=3
 # and the binary modes are toggled using the bitwise XOR, ^1 
-LOSSLESS = 0 # 1 := perfect ideal, 0:=delay+losing packets, etc
+LOSSLESS = 1 # 1 := perfect ideal, 0:=delay+losing packets, etc
 SWITCHING = 1 # 1:=when aoi threshold reaached switch to safe mode, 0:=never use the safe mode
 #########################
 
