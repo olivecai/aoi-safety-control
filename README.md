@@ -12,7 +12,7 @@ current goal: design an age aware CBF that outperforms the safe mode switching p
 The safe mode switching policy paper is implemented in `standalone_scripts/aoi_based_switching_control_for_safe_haptic_teleoperation_over_a_wireless_network.py`, where the experiments from the paper can be run; this file does not contain any CBF-related implementation and served as me familiarizing myself with the paper.
 The equations from the safe mode swithcing policy paper are also listed as functions in the file `src/building_block.py` to be invoked by `src/cbf_layer.py`.
 
-Any CBF-related implementation is developed in `src/cbf_layer.py`; including the convex optimization using the cvxpy library, generation of safe set and human desired reference
+Any CBF-related implementation is developed in `src/cbf_layer.py`; including the convex optimization using the cvxpy library, generation of safe set and human desired reference. The cbf functions are stored in `src/cbf_library`
 
 And finally, `src/main.py` is the entrypoint to import params from `src/experiment_go.py`, invoke `src/cbf_layer.py` (which invokes `src/building_block.py`), and is responsible for outputting a txt with the outputs from the run, and plotting your trajectories.
 
