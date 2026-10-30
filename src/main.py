@@ -2,6 +2,7 @@
 from experiment_go import *
 from building_block import *
 from cbf_layer import *
+from cbf_library.mod import instantiate_cbf
 
 import cvxpy as cp
 import numpy as np
@@ -28,7 +29,9 @@ def main():
                 lossless=k
                 switching = i
                 cbf_mode = j
-                Y = simulate_run_cbf(N_s, h_seq, AOI_THRESHOLD, AOI_THRESHOLD, rng, switching, cbf_mode, cbf=cbf, lossless=lossless)
+                make_cbf, get_u_cbf = instantiate_cbf(cbf_mode)
+                rng = np.random.default_rng(RNG_SEED) #rng must be re-invoked every time for runs to be same rng
+                Y = simulate_run_cbf(N_s=N_s, h_seq=h_seq, aoi_threshold_b=AOI_THRESHOLD, aoi_threshold_f=AOI_THRESHOLD, rng=rng, make_cbf=make_cbf, get_u_cbf=get_u_cbf, switching=switching, lossless=lossless)
                    
                 Ys.append(Y)
                 name = f"actual trajectory [delay_added={k}] [switching={switching}] [cbf_mode={cbf_mode}]"

@@ -7,11 +7,10 @@ This file invokes functions from building_blocks.py and imports variables from e
 '''
 from experiment_go import *
 from building_block import *
-
 import cvxpy as cp
 import numpy as np
 
-def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switching=True, cbf_mode=True, cbf=make_unit_circle_cbf_with_velocity_penalization_for_high_aoi, seed=RNG_SEED, lossless=True):
+def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, get_u_cbf, switching=True, seed=RNG_SEED, lossless=True):
     '''
     pass in a trajecotry h_seq for 2 dof system 
     set switching and cbf_mode
@@ -21,8 +20,8 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
     # # precompute the 8 possible matrices ONCE (avoid rebuild everytime)
     # modes = {(sf, sb, m): build_mode(sf, sb, m)
     #          for sf in (0, 1) for sb in (0, 1) for m in (MODE_HUMAN, MODE_SAFE)}
-    if cbf_mode:
-        solve = cbf()
+    if make_cbf is not None:
+        solve = make_cbf()
     z = np.zeros(8) #empty augmented state z(t) = [Xp(t)_T Xc(t)_T Ur(t-1) Yl(t-1)]_T
     sigma_f, sigma_b = 1, 1          # start with both links working
     aoi_f, aoi_b = 1, 1
@@ -91,14 +90,9 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, switchin
         Dc = D_controller[zeta]
 
         h = h_seq[:,t]
-        if cbf_mode == USE_STANDARD_CBF: # no aoi
-            get_cbf_function = get_u_cbf
-        elif cbf_mode == USE_AOI_CBF:
-            get_cbf_function = get_u_cbf_aoi_velocity_penalization_for_slack
-        
 
-        if cbf_mode !=0:
-            u_cbf = get_cbf_function(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f))
+        if get_u_cbf is not None:
+            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f))
             x_plant = Ap @ x_plant + Bp @ u_cbf #safe
         else:
             x_plant = Ap @ x_plant + Bp @ u_remote #safe
