@@ -1,3 +1,11 @@
+'''
+Instructions:
+Edit `src/experiment_go.py`. Save the file. Then `python3 src/main.py`
+
+'''
+
+
+
 from experiment_go import *
 from building_block import *
 from cbf_layer import *

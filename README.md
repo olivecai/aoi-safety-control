@@ -22,6 +22,6 @@ You can edit the "src/experiment_go.py" file to tweak which experiment you want 
 
 ## requirements
 
-cvxpy, numpy
+cvxpy, numpy, scipy
 
-
+(You can check my venv pip freeze into requirements.txt but this might also have other unnecessary libraries)
