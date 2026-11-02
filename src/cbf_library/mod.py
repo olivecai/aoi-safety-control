@@ -4,6 +4,7 @@ from experiment_go import *
 from . import slack_velocity_with_aoi_gamma
 from . import standard_with_aoi_gamma
 from . import standard
+from . import slack_position_with_aoi_gamma
 
 def instantiate_cbf(cbf_enum):
     if cbf_enum == USE_NO_CBF:
@@ -18,4 +19,7 @@ def instantiate_cbf(cbf_enum):
     if cbf_enum == USE_AOI_VEL_CBF:
          make_cbf = slack_velocity_with_aoi_gamma.make
          get_u_cbf = slack_velocity_with_aoi_gamma.get_u_cbf
+    if cbf_enum == USE_AOI_POS_CBF:
+        make_cbf = slack_position_with_aoi_gamma.make
+        get_u_cbf = slack_position_with_aoi_gamma.get_u_cbf
     return make_cbf,get_u_cbf

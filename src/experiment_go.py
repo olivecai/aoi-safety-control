@@ -23,6 +23,7 @@ USE_NO_CBF=0
 USE_STANDARD_CBF=1
 USE_AOI_CBF=2
 USE_AOI_VEL_CBF=3
+USE_AOI_POS_CBF=4
 # and the binary modes are toggled using the bitwise XOR, ^1 
 LOSSLESS = 1 # 1 := perfect ideal, 0:=delay+losing packets, etc
 SWITCHING = 1 # 1:=when aoi threshold reaached switch to safe mode, 0:=never use the safe mode
@@ -31,6 +32,6 @@ SWITCHING = 1 # 1:=when aoi threshold reaached switch to safe mode, 0:=never use
 
 ### edit these for your simulation run, where in the main.py loop it will go through each of the unique cases ###
 SWITCHING_SIMULATION =[SWITCHING, SWITCHING^1]
-CBF_SIMULATION = [USE_NO_CBF, USE_STANDARD_CBF, USE_AOI_CBF, USE_AOI_VEL_CBF]
+CBF_SIMULATION = [USE_STANDARD_CBF, USE_AOI_VEL_CBF, USE_AOI_POS_CBF]
 LOSSLESS_SIMULATION=[LOSSLESS^1]
                        
