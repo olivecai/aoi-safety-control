@@ -83,7 +83,7 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, u_prev, R=SAFE_SET
     #     return u_remote
   
     # gamma now a function of current_aoi, everything else is just a const:
-    m_vel = 0.1 #yooo later we can make this a function too?!?!?!? maybe not tractable tho
+    m_vel = 0.1 
     bd_lower, bd_upper = 0, gamma/5
     velocity_cbf_shift = AOI_THRESHOLD
     gamma_velocity = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-velocity_cbf_shift)))
