@@ -5,6 +5,8 @@ from . import slack_velocity_with_aoi_gamma
 from . import standard_with_aoi_gamma
 from . import standard
 from . import slack_position_with_aoi_gamma
+from . import cbf_slew_u
+from . import local_limit
 
 def instantiate_cbf(cbf_enum):
     if cbf_enum == USE_NO_CBF:
@@ -22,4 +24,10 @@ def instantiate_cbf(cbf_enum):
     if cbf_enum == USE_AOI_POS_CBF:
         make_cbf = slack_position_with_aoi_gamma.make
         get_u_cbf = slack_position_with_aoi_gamma.get_u_cbf
+    if cbf_enum == USE_SLEW_U_CBF:
+        make_cbf = cbf_slew_u.make
+        get_u_cbf = cbf_slew_u.get_u_cbf
+    if cbf_enum == USE_LOCAL_LIMIT:
+        make_cbf=local_limit.make
+        get_u_cbf=local_limit.get_u_cbf
     return make_cbf,get_u_cbf

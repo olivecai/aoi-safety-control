@@ -51,6 +51,7 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf
     y_local = y_remote # because in the beginning the aoi is 1
     u_local = Cc @ x_controller + Dc @ ( h - y_local)
     u_remote = u_local # because in the beginning aoi is 1
+    u_prev = np.zeros((1,2))
  
 
     # print(f"Initial State:\n{x_plant}")
@@ -92,10 +93,12 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf
         h = h_seq[:,t]
 
         if get_u_cbf is not None:
-            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f))
+            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f), u_prev=u_prev)
             x_plant = Ap @ x_plant + Bp @ u_cbf #safe
+            u_prev = u_cbf
         else:
             x_plant = Ap @ x_plant + Bp @ u_remote #safe
+            u_prev=u_remote
           
         y_remote = Cp @ x_plant
         y_local = y_remote if sigma_b else y_local #update y_local (local feedback controller side) if the backwards link worked
