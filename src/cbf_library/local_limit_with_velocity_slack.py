@@ -59,10 +59,10 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, u_prev, R=SAFE_SET
     gamma_aoi = bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_pos*(current_aoi-cbf_shift)))
 
     ####### velocity stuff
-    m_vel = 1
-    bd_lower, bd_upper = 0, 2e-1
+    m_vel = 0.8
+    bd_lower, bd_upper = 0, 1e-1
     velocity_cbf_shift = AOI_THRESHOLD
-    V= bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-0.5)))
+    V= bd_lower + (bd_upper-bd_lower)/(1+np.e**(m_vel*(current_aoi-3)))
 
     Cp_vel = np.array([0.0, Cp.ravel()[1]])
     vel_Apxp_val = (Cp_vel @ Ap @ x_plant).ravel(); vel_Bp_val = (Cp_vel @ Bp).item()

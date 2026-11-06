@@ -56,7 +56,7 @@ def plot_selected_trajectory(Ys, Ys_names, h_seq, SAFE_SET_RADIUS=SAFE_SET_RADIU
     def update_plot(_label=None):
         for name, line in lines:
             is_selected = selected.get(name, False)
-            line.set_alpha(1.0 if is_selected else 0.12)
+            line.set_alpha(0.8 if is_selected else 0.12)
             line.set_linewidth(2.5 if is_selected else 1.0)
 
         active_names = [name for name, is_on in selected.items() if is_on]
@@ -85,19 +85,21 @@ def main():
 
     Ys=[]
     Ys_names=[]
-    for k in LOSSLESS_SIMULATION:
-        for i in SWITCHING_SIMULATION:
-            for j in CBF_SIMULATION:
-                lossless=k
-                switching = i
-                cbf_mode = j
-                make_cbf, get_u_cbf = instantiate_cbf(cbf_mode)
-                rng = np.random.default_rng(RNG_SEED) #rng must be re-invoked every time for runs to be same rng
-                Y = simulate_run_cbf(N_s=N_s, h_seq=h_seq, aoi_threshold_b=AOI_THRESHOLD, aoi_threshold_f=AOI_THRESHOLD, rng=rng, make_cbf=make_cbf, get_u_cbf=get_u_cbf, switching=switching, lossless=lossless)
-                   
-                Ys.append(Y)
-                name = f"lossless={k} switch={switching} cbf={cbf_mode}]"
-                Ys_names.append(name)
+    for a in AOI_SIMULATION:
+        for k in LOSSLESS_SIMULATION:
+            for i in SWITCHING_SIMULATION:
+                for j in CBF_SIMULATION:
+                    lossless=k
+                    switching = i
+                    cbf_mode = j
+                    aoi_aware=a
+                    make_cbf, get_u_cbf = instantiate_cbf(cbf_mode)
+                    rng = np.random.default_rng(RNG_SEED) #rng must be re-invoked every time for runs to be same rng
+                    Y = simulate_run_cbf(N_s=N_s, h_seq=h_seq, aoi_threshold_b=AOI_THRESHOLD, aoi_threshold_f=AOI_THRESHOLD, rng=rng, make_cbf=make_cbf, get_u_cbf=get_u_cbf, switching=switching, lossless=lossless, aoi_aware=aoi_aware)
+                    
+                    Ys.append(Y)
+                    name = f"lossless={k} switch={switching} cbf={cbf_mode} aoi_aware={aoi_aware}]"
+                    Ys_names.append(name)
     print("h_seq")
     print(h_seq)
     plot_selected_trajectory(Ys, Ys_names, h_seq)

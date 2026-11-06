@@ -10,7 +10,7 @@ from building_block import *
 import cvxpy as cp
 import numpy as np
 
-def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, get_u_cbf, switching=True, seed=RNG_SEED, lossless=True):
+def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, get_u_cbf, switching=True, seed=RNG_SEED, lossless=True, aoi_aware=1):
     '''
     pass in a trajecotry h_seq for 2 dof system 
     set switching and cbf_mode
@@ -92,8 +92,11 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf
 
         h = h_seq[:,t]
 
+        current_aoi = max(aoi_b, aoi_f) if aoi_aware else 1
+        
+
         if get_u_cbf is not None:
-            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=max(aoi_b, aoi_f), u_prev=u_prev)
+            u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=current_aoi, u_prev=u_prev)
             x_plant = Ap @ x_plant + Bp @ u_cbf #safe
             u_prev = u_cbf
         else:
