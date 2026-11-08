@@ -5,21 +5,21 @@ import cvxpy as cp
 import numpy as np
 import matplotlib.pyplot as plt
 def make():
-    u = cp.Variable(2); 
+    u_cbf = cp.Variable(2); 
     u_r = cp.Parameter(2)
     CpApxp, CpBp, rho = cp.Parameter(2), cp.Parameter(), cp.Parameter(nonneg=True)
     difference_between_yt_CpApxp, r, w = cp.Parameter(2), cp.Parameter(nonneg=True), cp.Parameter(nonneg=True)
     prob = cp.Problem(
-        cp.Minimize(cp.sum_squares(u - u_r)),
-        [cp.norm(CpApxp + CpBp*u) <= rho,              # hard: wall disc, centred at 0
-         cp.norm(CpBp*u - difference_between_yt_CpApxp) <= r ])        # soft: local disc, centred at y_t
+        cp.Minimize(cp.sum_squares(u_cbf - u_r)),
+        [cp.norm(CpApxp + CpBp*u_cbf) <= rho,              # hard: wall disc, centred at 0
+         cp.norm(CpBp*u_cbf - difference_between_yt_CpApxp) <= r ])        # soft: local disc, centred at y_t
     def solve(u_r_v, CpApxp_v, CpBp_v, rho_v, difference_between_yt_CpApxp_v, r_v, w_v):
         (u_r.value, CpApxp.value, CpBp.value, rho.value,
          difference_between_yt_CpApxp.value, r.value, w.value) = u_r_v, CpApxp_v, CpBp_v, rho_v, difference_between_yt_CpApxp_v, r_v, w_v
-        prob.solve(solver=cp.CLARABEL, verbose=True)
-        if u.value is None:
+        prob.solve(solver=cp.CLARABEL, verbose=False)
+        if u_cbf.value is None:
             raise ValueError(f"CBF failed: {prob.status}")
-        return u.value, 0
+        return u_cbf.value, 0
     return solve
 
 def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, u_prev, R=SAFE_SET_RADIUS,

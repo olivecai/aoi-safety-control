@@ -92,29 +92,51 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf
 
         h = h_seq[:,t]
 
-        current_aoi = max(aoi_b, aoi_f) if aoi_aware else 1
+        # current_aoi = max(aoi_b, aoi_f) if aoi_aware else 1
         
+        current_aoi = aoi_f if aoi_aware else 1
 
         if get_u_cbf is not None:
             u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, current_aoi=current_aoi, u_prev=u_prev)
-            x_plant = Ap @ x_plant + Bp @ u_cbf #safe
-            u_prev = u_cbf
+            x_plant_cbf = Ap @ x_plant + Bp @ u_cbf #safe
+            u_prev_cbf = u_cbf
+
+        x_plant_ncbf = Ap @ x_plant + Bp @ u_remote #safe
+        u_prev_ncbf=u_remote
+
+        if get_u_cbf is not None:
+            x_plant, u_prev = x_plant_cbf , u_prev_cbf
         else:
-            x_plant = Ap @ x_plant + Bp @ u_remote #safe
-            u_prev=u_remote
-          
+            x_plant, u_prev = x_plant_ncbf , u_prev_ncbf
+
         y_remote = Cp @ x_plant
         y_local = y_remote if sigma_b else y_local #update y_local (local feedback controller side) if the backwards link worked
+
+        # add the y_local cbf here to get y_aoi_aware := assume continually decellerating drift in the direction of the last command given (more helpfully would also be the curl of the command given).
+        m_pos = 0.5
+        bd_lower, bd_upper = 0, 1
+        y_aoi_aware_t_parameter = bd_lower + (bd_upper-bd_lower)/(1+np.e**(-m_pos*(aoi_b-3)))
+        # y_assumption 
+                  
+        y_assumption = (Cp @ x_plant_ncbf)
         
-        # print("y_local", y_local)
+        y_aoi_aware = (1-y_aoi_aware_t_parameter) *y_local + y_aoi_aware_t_parameter * y_assumption  
+        
+        print("LOG y_local", y_local, "y_remote", y_remote)
+        print("LOG difference between y local and remote:", np.linalg.norm([y_local- y_remote]))
+        print(f"LOG aoi_f: {aoi_f}, aoi_b: {aoi_b}")
         # print("h", h)
         # print(h-y_local)
-
+        y_local  = y_assumption
         tracked_y_remote[:,t] = y_remote.ravel()
+
 
         x_controller = Ac @ x_controller + Bc @ (h - y_local)
         u_local = Cc @ x_controller + Dc @ ( h - y_local)
         u_remote = u_local if sigma_f else u_remote # update u_remote (remote command on plant side) if the forwards link worked
+        print("LOG u_local", u_local, "u_remote", u_remote)
+        print("LOG difference between u local and remote:", np.linalg.norm([u_local- u_remote]))
+        print(f"LOG aoi_f: {aoi_f}, aoi_b: {aoi_b}")
      
 
     return tracked_y_remote
