@@ -129,7 +129,7 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf
                 # # print("h", h)
                 # # print(h-y_local)
                 # y_local  = y_assumption
-                # tracked_y_remote[:,t] = y_remote.ravel()
+        tracked_y_remote[:,t] = y_remote.ravel()
 
 
         x_controller = Ac @ x_controller + Bc @ (h - y_local)

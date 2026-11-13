@@ -32,7 +32,7 @@ def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, u_prev, R=SAFE_SET
     s = 1/(1 + np.exp(-(current_aoi - 0.5*aoi_threshold)))
     # r_max = np.linalg.norm(R-np.linalg.norm(y_t))# distance from y_t to the boundary of the local disc, which is a function of AOI
     r_max=1
-    r_slope = 1.0
+    r_slope = 0.5
     bd_lower, bd_upper = 0, r_max
     r = bd_lower + (bd_upper-bd_lower)/(1+np.e**(r_slope*(current_aoi-1)))
 
