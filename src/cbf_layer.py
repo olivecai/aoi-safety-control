@@ -112,23 +112,24 @@ def simulate_run_cbf(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf
         y_remote = Cp @ x_plant
         y_local = y_remote if sigma_b else y_local #update y_local (local feedback controller side) if the backwards link worked
 
-        # add the y_local cbf here to get y_aoi_aware := assume continually decellerating drift in the direction of the last command given (more helpfully would also be the curl of the command given).
-        m_pos = 0.5
-        bd_lower, bd_upper = 0, 1
-        y_aoi_aware_t_parameter = bd_lower + (bd_upper-bd_lower)/(1+np.e**(-m_pos*(aoi_b-3)))
-        # y_assumption 
-                  
-        y_assumption = (Cp @ x_plant_ncbf)
-        
-        y_aoi_aware = (1-y_aoi_aware_t_parameter) *y_local + y_aoi_aware_t_parameter * y_assumption  
-        
-        print("LOG y_local", y_local, "y_remote", y_remote)
-        print("LOG difference between y local and remote:", np.linalg.norm([y_local- y_remote]))
-        print(f"LOG aoi_f: {aoi_f}, aoi_b: {aoi_b}")
-        # print("h", h)
-        # print(h-y_local)
-        y_local  = y_assumption
-        tracked_y_remote[:,t] = y_remote.ravel()
+        # uncomment and untab to get this back
+                # # add the y_local cbf here to get y_aoi_aware := assume continually decellerating drift in the direction of the last command given (more helpfully would also be the curl of the command given).
+                # m_pos = 0.5
+                # bd_lower, bd_upper = 0, 1
+                # y_aoi_aware_t_parameter = bd_lower + (bd_upper-bd_lower)/(1+np.e**(-m_pos*(aoi_b-3)))
+                # # y_assumption 
+                        
+                # y_assumption = (Cp @ x_plant_ncbf)
+                
+                # y_aoi_aware = (1-y_aoi_aware_t_parameter) *y_local + y_aoi_aware_t_parameter * y_assumption  
+                
+                # print("LOG y_local", y_local, "y_remote", y_remote)
+                # print("LOG difference between y local and remote:", np.linalg.norm([y_local- y_remote]))
+                # print(f"LOG aoi_f: {aoi_f}, aoi_b: {aoi_b}")
+                # # print("h", h)
+                # # print(h-y_local)
+                # y_local  = y_assumption
+                # tracked_y_remote[:,t] = y_remote.ravel()
 
 
         x_controller = Ac @ x_controller + Bc @ (h - y_local)
