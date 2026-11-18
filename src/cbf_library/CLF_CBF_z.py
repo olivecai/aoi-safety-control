@@ -79,6 +79,7 @@ def make(use_clf=True):
         return u_cbf.value, True
 
     solve.info = {}
+
     return solve
 
 

@@ -49,13 +49,12 @@ def build_augmented(Ap, Bp):
     B_z = np.vstack([Bp, np.zeros((n, m)), np.eye(m)])
     return A_z, B_z
 
-
-def clf_params(Ap, Bp, q=1.0, eps=0.1, r=1.0):
-    # find augmented Az,Bz for augmented state z, and also get the P and K for cLF.
-
+def clf_params(Ap, Bp, q_vel=1.0, eps_pos=1e-2, eps_u=1e-2, r=1.0):
     n, m = Ap.shape[0], Bp.shape[1]
     A_z, B_z = build_augmented(Ap, Bp)
-    Q_z = np.diag([q] * n + [eps] * n + [eps] * m)
+    Q_z = np.diag([eps_pos, q_vel,      # current [pos, vel]
+                   eps_pos, q_vel,      # stale   [pos, vel]
+                   eps_u])              # u(t-1)
     R = r * np.eye(m)
     P = solve_discrete_are(A_z, B_z, Q_z, R)
     P = (P + P.T) / 2
@@ -64,8 +63,6 @@ def clf_params(Ap, Bp, q=1.0, eps=0.1, r=1.0):
     assert rho < 1, f"K not stabilizing, spectral radius {rho}"
     assert np.all(np.linalg.eigvalsh(P) > 0), "P not positive definite"
     return A_z, B_z, P, K
-
-
 
 def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, get_u_cbf, switching=True, seed=RNG_SEED, lossless=True, aoi_aware=1):
     '''
@@ -126,16 +123,15 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, ge
     # z = np.concatenate((x_plant, x_plant_prev, u_prev_eff))
     # print(f"Initial State:\n{x_plant}")
 
-    x_ref = np.zeros((2, 2))
-    x_ref[0, :] = h / Cp[0, 0]
-    x_ref_prev = x_ref.copy()
+    # DO NOT USE THE LINES BELOW this was when human reference was added in just to practice CLF
+    # x_ref = np.zeros((2, 2))
+    # x_ref[0, :] = h / Cp[0, 0]
+    # x_ref_prev = x_ref.copy()
+
     x_plant_prev = x_plant.copy()
-
-
-    x_plant_prev = x_plant.copy()
-
 
     for t in range(N_s):
+        z = np.vstack([x_plant, x_plant_prev, u_prev_eff])   # 5x2
         # 1. channel, eq (4): bursty Markov success/failure
         if lossless:
             sigma_f = sigma_b = 1
@@ -176,27 +172,29 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, ge
 
         h = h_seq[:,t]
 
-        x_ref_prev = x_ref.copy()                 # last step's reference
-        x_ref = np.zeros((2, 2))
-        x_ref[0, :] = h / Cp[0, 0]                # this step's reference (zero velocity)
-        u_ref = np.zeros((1, 2))
-        z_err = np.vstack([x_plant - x_ref, x_plant_prev - x_ref_prev, u_prev_eff - u_ref])
-        print("pos/vel err :", np.linalg.norm(x_plant - x_ref))
-        print("stale err   :", np.linalg.norm(x_plant_prev - x_ref_prev))
-        print("u block     :", np.linalg.norm(u_prev_eff - u_ref))
+        # x_ref_prev = x_ref.copy()                 # last step's reference
+        # x_ref = np.zeros((2, 2))
+        # x_ref[0, :] = h / Cp[0, 0]                # this step's reference (zero velocity)
+        # u_ref = np.zeros((1, 2))
+        # z_err = np.vstack([x_plant - x_ref, x_plant_prev - x_ref_prev, u_prev_eff - u_ref])
+        # print("pos/vel err :", np.linalg.norm(x_plant - x_ref))
+        # print("stale err   :", np.linalg.norm(x_plant_prev - x_ref_prev))
+        # print("u block     :", np.linalg.norm(u_prev_eff - u_ref))
         # current_aoi = max(aoi_b, aoi_f) if aoi_aware else 1
         
+    
+
         current_aoi = aoi_f if aoi_aware else 1
 
       
-        u_ref = np.zeros((1, 2))                         # steady-state command; 0 for a double integrator
-        z_err = np.vstack([x_plant - x_ref, x_plant_prev - x_ref_prev, u_prev_eff - u_ref])
-        print("V_now", solve.info.get("V_now"), "||z_err||", np.linalg.norm(z_err))
+        # u_ref = np.zeros((1, 2))                         # steady-state command; 0 for a double integrator
+        # z_err = np.vstack([x_plant - x_ref, x_plant_prev - x_ref_prev, u_prev_eff - u_ref])
+        # print("V_now", solve.info.get("V_now"), "||z_err||", np.linalg.norm(z_err))
 
         if get_u_cbf is not None:
             u_cbf = get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote,
                   current_aoi=current_aoi, u_prev=u_prev_eff,
-                  z=z_err, A_z=A_z, B_z=B_z, P=P)   # no AoI-dependence in the CLF part            
+                  z=z, A_z=A_z, B_z=B_z, P=P)   # no AoI-dependence in the CLF part            
             x_plant_cbf = Ap @ x_plant + Bp @ u_cbf #safe
             u_prev_cbf = u_cbf
 
