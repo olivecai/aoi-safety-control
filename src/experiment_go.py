@@ -28,6 +28,7 @@ USE_SLEW_U_CBF=5
 USE_LOCAL_LIMIT=6
 USE_LOCAL_LIMIT_WITH_VELOCITY_SLACK=7
 USE_CLF_CBF = 8
+USE_CLF_CBF_LOCAL_LIMIT=9
 # and the binary modes are toggled using the bitwise XOR, ^1 
 LOSSLESS = 1 # 1 := perfect ideal, 0:=delay+losing packets, etc
 SWITCHING = 1 # 1:=when aoi threshold reaached switch to safe mode, 0:=never use the safe mode
@@ -37,7 +38,7 @@ AOI_AWARE=1 # 1:=current_aoi is recorded as the actual aoi, 0:=even if the curre
 
 ### edit these for your simulation run, where in the main.py loop it will go through each of the unique cases ###
 SWITCHING_SIMULATION =[SWITCHING^1]
-CBF_SIMULATION = [USE_CLF_CBF]
+CBF_SIMULATION = [USE_CLF_CBF_LOCAL_LIMIT]
 LOSSLESS_SIMULATION=[LOSSLESS^1]
 AOI_SIMULATION=[AOI_AWARE]
                     

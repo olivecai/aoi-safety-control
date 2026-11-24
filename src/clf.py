@@ -39,28 +39,47 @@ from scipy.linalg import solve_discrete_are
 
 # this builds the augmented Az and Bz matrices for the augemented state z
 # and we only need to do this once using the matrices Ap[HUMAN MODE] and Bp[HUMAN MODE] 
-def build_augmented(Ap, Bp):
+
+
+# ---------------------------------------------------------------- augmented model
+def build_augmented(Ap, Bp, n_x=1, n_u=1):
+    '''Shift-register model: z+ = A_z z + B_z u, z = [x(t..t-n_x), u(t-1..t-n_u)].'''
     n, m = Ap.shape[0], Bp.shape[1]
-    A_z = np.block([
-        [Ap,               np.zeros((n, n)), np.zeros((n, m))],
-        [np.eye(n),        np.zeros((n, n)), np.zeros((n, m))],
-        [np.zeros((m, n)), np.zeros((m, n)), np.zeros((m, m))],
-    ])
-    B_z = np.vstack([Bp, np.zeros((n, m)), np.eye(m)])
+    dx, du = n * (n_x + 1), m * n_u
+    N = dx + du
+    A_z = np.zeros((N, N))
+    B_z = np.zeros((N, m))
+
+    A_z[0:n, 0:n] = Ap                                   # x(t+1) = Ap x(t) + Bp u(t)
+    B_z[0:n, :] = Bp
+    for k in range(1, n_x + 1):                          # x(t-k) at t+1 is x(t-k+1) at t
+        A_z[k * n:(k + 1) * n, (k - 1) * n:k * n] = np.eye(n)
+    if n_u > 0:
+        B_z[dx:dx + m, :] = np.eye(m)                    # u(t) becomes u((t+1)-1)
+        for j in range(1, n_u):                          # shift older inputs
+            A_z[dx + j * m:dx + (j + 1) * m, dx + (j - 1) * m:dx + j * m] = np.eye(m)
     return A_z, B_z
 
-def clf_params(Ap, Bp, q_vel=1.0, eps_pos=1e-2, eps_u=1e-2, r=1.0):
+
+def clf_params(Ap, Bp, n_x=1, n_u=1, q_vel=1.0, eps_pos=1e-2, stale_scale=1.0,
+               eps_u=1e-2, r=1.0):
+    '''
+    P from LQR on the augmented model (plant-side only, no reference).
+    Assumes x = [position, velocity]. Weights: current [eps_pos, q_vel],
+    stale x blocks [eps_pos, stale_scale*q_vel], each u(t-k) gets eps_u.
+    '''
     n, m = Ap.shape[0], Bp.shape[1]
-    A_z, B_z = build_augmented(Ap, Bp)
-    Q_z = np.diag([eps_pos, q_vel,      # current [pos, vel]
-                   eps_pos, q_vel,      # stale   [pos, vel]
-                   eps_u])              # u(t-1)
+    A_z, B_z = build_augmented(Ap, Bp, n_x, n_u)
+    diag = [eps_pos, q_vel]
+    diag += [eps_pos, stale_scale * q_vel] * n_x
+    diag += [eps_u] * (m * n_u)
+    Q_z = np.diag(diag)
     R = r * np.eye(m)
     P = solve_discrete_are(A_z, B_z, Q_z, R)
     P = (P + P.T) / 2
     K = np.linalg.solve(R + B_z.T @ P @ B_z, B_z.T @ P @ A_z)
-    rho = np.max(np.abs(np.linalg.eigvals(A_z - B_z @ K)))
-    assert rho < 1, f"K not stabilizing, spectral radius {rho}"
+    rho_cl = np.max(np.abs(np.linalg.eigvals(A_z - B_z @ K)))
+    assert rho_cl < 1, f"K not stabilizing, spectral radius {rho_cl}"
     assert np.all(np.linalg.eigvalsh(P) > 0), "P not positive definite"
     return A_z, B_z, P, K
 

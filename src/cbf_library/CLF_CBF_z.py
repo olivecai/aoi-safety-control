@@ -86,7 +86,7 @@ def make(use_clf=True):
 def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, u_prev,
               R=SAFE_SET_RADIUS, gamma=0.1, margin=0.0, safe_tolerance=SAFE_TOLERANCE,
               current_aoi=1,
-              z=None, A_z=None, B_z=None, P=None, alpha=0.1, slack_weight=10.0):
+              z=None, A_z=None, B_z=None, P=None, alpha=0.1, slack_weight=1):
     '''
     The cbf works only on the REMOTE side. Use the function 'solve' to perform the cvxpy solve.
     z is the (error-coordinate) augmented state, 5x2 (one column per DOF).
