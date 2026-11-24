@@ -150,7 +150,8 @@ def make(n_aug, use_clf=True):
     r = cp.Parameter(nonneg=True)
 
     constraints = [cp.norm(CpApxp + CpBp * u) <= rho,       # wall disc
-                   cp.norm(CpBp * u - diff) <= r]           # local disc, == ||y_next - y_t|| <= r
+                   cp.norm(CpBp * u - diff) <= r
+                   ]           # local disc, == ||y_next - y_t|| <= r
     objective = cp.sum_squares(u - u_r)
 
     if use_clf:
@@ -195,7 +196,7 @@ def make(n_aug, use_clf=True):
     return solve
 
 
-def local_radius(current_aoi, r_max=1.0, r_slope=0.5):
+def local_radius(current_aoi, r_max=0.5, r_slope=0.1):
     return r_max / (1 + np.exp(r_slope * (current_aoi - 1)))
 
 

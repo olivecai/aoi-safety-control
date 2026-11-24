@@ -12,9 +12,9 @@ SAFE_SET_EPSILON = 1e-2
 SAFE_TOLERANCE = 1e-10
 
 # these are trajectory parameters
-HUMAN_DESIRED_TRAJ_RADIUS = 4.0 #if exceeds SAFE_SET_RADIUS then you should see that clamping of trajecotry
+HUMAN_DESIRED_TRAJ_RADIUS = 6.0 #if exceeds SAFE_SET_RADIUS then you should see that clamping of trajecotry
 N_s = 2000 #timesteps in ms
-RNG_SEED = 1 # arbitrary random number
+RNG_SEED = 8 # arbitrary random number
 AOI_THRESHOLD = 13 #threshold for when to activate safe mode in the safe mode switching case (paper says 16 but my simualtions show 13-16 is all pretty much the same goodness)
 
 ### DO NOT EDIT THIS SECTION ####

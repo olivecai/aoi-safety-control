@@ -69,7 +69,7 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, ge
         if equilibrium == "tracking":
             x_ref = np.zeros((n, 2))
             x_ref[0, :] = h_rx / Cp_now[0, 0]            # held reference, zero velocity
-            z_ref = np.vstack([x_ref] * (n_x + 1) + [np.zeros((m, 2))] * n_u)
+            z_ref = np.vstack([x_ref] * (n_x + 1) + [np.zeros((m, 2))] * n_u) # the current z state with the x_reference from h_rx (mever use just h only use h_rx here on the robto side)
             z = z - z_ref
         return z
 
@@ -93,7 +93,7 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, ge
         Cp, Ap, Bp = C_plant[zeta], A_plant[zeta], B_plant[zeta]
         Cc, Ac, Bc, Dc = C_controller[zeta], A_controller[zeta], B_controller[zeta], D_controller[zeta]
 
-        h = h_seq[:, t]
+        h = h_seq[:, t] #at each timestep h is always updated on the controller side but h_rx (h received) is only updated ont he remote robot side if the forward link worked. only use the h_rx 
         current_aoi = aoi_f if aoi_aware else 1
 
         # filtered (or raw) command

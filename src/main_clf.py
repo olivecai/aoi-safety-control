@@ -18,7 +18,7 @@ from matplotlib.widgets import CheckButtons
 
 # ---------------------------------------------------------------- new experiment knobs
 HIST_SIMULATION = [(1, 1)]      # list of (n_x, n_u) history lengths, e.g. [(0, 0), (1, 1), (3, 3)]
-CLF_SIMULATION = ["velocity","tracking"]  # None = no CLF; "velocity" = velocity -> 0;
+CLF_SIMULATION = [None, "velocity","tracking"]  # None = no CLF; "velocity" = velocity -> 0;
                                                  # "tracking" = position error w.r.t. last received reference
 ALPHA = 0.05                    # CLF decay per step (must NOT depend on AoI)
 SLACK_WEIGHT = 1.0              # CLF slack penalty (must NOT depend on AoI)
