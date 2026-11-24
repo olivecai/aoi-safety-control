@@ -20,6 +20,7 @@ from experiment_go import *
 import cvxpy as cp
 import numpy as np
 from scipy.linalg import solve_discrete_are
+from scipy.linalg import solve_discrete_lyapunov
 
 DEBUG = False
 
@@ -43,28 +44,82 @@ def build_augmented(Ap, Bp, n_x=1, n_u=1):
             A_z[dx + j * m:dx + (j + 1) * m, dx + (j - 1) * m:dx + j * m] = np.eye(m)
     return A_z, B_z
 
+from scipy.linalg import solve_discrete_lyapunov, eigh
 
-def clf_params(Ap, Bp, n_x=1, n_u=1, q_vel=1.0, eps_pos=1e-2, stale_scale=1.0,
-               eps_u=1e-2, r=1.0):
-    '''
-    P from LQR on the augmented model (plant-side only, no reference).
-    Assumes x = [position, velocity]. Weights: current [eps_pos, q_vel],
-    stale x blocks [eps_pos, stale_scale*q_vel], each u(t-k) gets eps_u.
-    '''
+def clf_params(Ap, Bp, n_x=1, n_u=1, equilibrium="velocity", q_pos=1.0, q_vel=1.0,
+               eps_pos=1e-2, stale_scale=1.0, eps_u=1e-2, r=1.0, verbose=False):
     n, m = Ap.shape[0], Bp.shape[1]
     A_z, B_z = build_augmented(Ap, Bp, n_x, n_u)
-    diag = [eps_pos, q_vel]
-    diag += [eps_pos, stale_scale * q_vel] * n_x
+    w = 3000
+    if equilibrium == "tracking":
+        diag = [w * q_pos, q_vel] + [stale_scale * w * q_pos, stale_scale * q_vel] * n_x
+    elif equilibrium == "velocity":
+        diag = [w * eps_pos, q_vel] + [w * eps_pos, stale_scale * q_vel] * n_x
+    else:
+        raise ValueError(f"unknown equilibrium: {equilibrium!r}")
     diag += [eps_u] * (m * n_u)
     Q_z = np.diag(diag)
-    R = r * np.eye(m)
-    P = solve_discrete_are(A_z, B_z, Q_z, R)
+
+    assert np.max(np.abs(np.linalg.eigvals(A_z))) < 1, "unforced augmented system is not Schur stable"
+    P = solve_discrete_lyapunov(A_z.T, Q_z)          # A_z' P A_z - P = -Q_z
     P = (P + P.T) / 2
-    K = np.linalg.solve(R + B_z.T @ P @ B_z, B_z.T @ P @ A_z)
-    rho_cl = np.max(np.abs(np.linalg.eigvals(A_z - B_z @ K)))
-    assert rho_cl < 1, f"K not stabilizing, spectral radius {rho_cl}"
     assert np.all(np.linalg.eigvalsh(P) > 0), "P not positive definite"
-    return A_z, B_z, P, K
+
+    alpha_max = float(eigh(Q_z, P, eigvals_only=True).min())   # V+ <= (1 - alpha_max) V when u = 0
+    print("alpha_max (u=0):", alpha_max, " cond(P):", np.linalg.cond(P))
+    return A_z, B_z, P, alpha_max      # 4th output is now alpha_max, not K
+    
+# def clf_params(Ap, Bp, n_x=1, n_u=1, equilibrium="velocity", q_pos=1.0, q_vel=1.0,
+#                eps_pos=1e-2, stale_scale=1, eps_u=1e-2, r=1.0):
+#     '''
+#     P from LQR on the augmented model. Assumes x = [position, velocity].
+
+#     equilibrium="velocity": only velocity is weighted, current [eps_pos, q_vel], stale blocks
+#                             [eps_pos, stale_scale*q_vel]. z holds raw plant-side quantities.
+#     equilibrium="tracking": position error is weighted too, current [q_pos, q_vel], stale blocks
+#                             stale_scale*[q_pos, q_vel]. z must be built in error coordinates
+#                             (x - x_ref, where x_ref comes from the last RECEIVED reference).
+#     Each u(t-k) gets eps_u.
+#     '''
+#     n, m = Ap.shape[0], Bp.shape[1]
+#     A_z, B_z = build_augmented(Ap, Bp, n_x, n_u)
+#     if equilibrium == "tracking":
+#         diag = [q_pos, q_vel]
+#         diag += [stale_scale * q_pos, stale_scale * q_vel] * n_x
+#     elif equilibrium == "velocity":
+#         diag = [eps_pos, q_vel]
+#         diag += [eps_pos, stale_scale * q_vel] * n_x
+#     else:
+#         raise ValueError(f"unknown equilibrium: {equilibrium!r} (use 'velocity' or 'tracking')")
+#     diag += [eps_u] * (m * n_u)
+#     Q_z = np.diag(diag)
+
+#     R = r * np.eye(m)
+#     # P = solve_discrete_are(A_z, B_z, Q_z, R)
+#     # P = (P + P.T) / 2
+
+
+#     A_z, B_z = build_augmented(Ap, Bp, n_x, n_u)
+#     P = solve_discrete_lyapunov(A_z.T, Q_z)          # A_z' P A_z - P = -Q_z
+#     P = (P + P.T) / 2
+#     L = np.linalg.cholesky(P).T
+#     # alpha_max = 1 - np.linalg.norm(L @ A_z @ np.linalg.inv(L), 2) ** 2
+#     # print("alpha_max (u=0):", alpha_max)
+#     K = np.linalg.solve(R + B_z.T @ P @ B_z, B_z.T @ P @ A_z)
+#     rho_cl = np.max(np.abs(np.linalg.eigvals(A_z - B_z @ K)))
+#     assert rho_cl < 1, f"K not stabilizing, spectral radius {rho_cl}"
+#     assert np.all(np.linalg.eigvalsh(P) > 0), "P not positive definite"
+
+#     A_cl = A_z - B_z @ K
+#     L = np.linalg.cholesky(P).T
+#     rate = np.linalg.norm(L @ A_cl @ np.linalg.inv(L), 2) ** 2   # worst-case V+/V under u = -Kz
+#     alpha_max = 1 - rate
+#     print("alpha_max:", alpha_max)
+#     print("open-loop |eig(Ap)|:", np.abs(np.linalg.eigvals(Ap)))
+#     print("closed-loop |eig|  :", np.sort(np.abs(np.linalg.eigvals(A_z - B_z @ K))))
+#     print("Bp:", Bp.ravel())
+#     exit()
+#     return A_z, B_z, P, K
 
 
 class History:
@@ -146,7 +201,7 @@ def local_radius(current_aoi, r_max=1.0, r_slope=0.5):
 
 def get_u_cbf(solve, x_plant, u_remote, Ap, Bp, Cp, y_remote, u_prev, R=SAFE_SET_RADIUS,
               gamma=0.1, current_aoi=1, aoi_threshold=AOI_THRESHOLD,
-              z=None, A_z=None, B_z=None, P=None, alpha=0.05, slack_weight=1.0):
+              z=None, A_z=None, B_z=None, P=None, alpha=0.1, slack_weight=1.0):
     CpBp = (Cp @ Bp).item()
     if abs(CpBp) < 1e-12:
         return np.asarray(u_remote).reshape(1, 2)

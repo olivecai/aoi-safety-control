@@ -17,8 +17,9 @@ import matplotlib.pyplot as plt
 from matplotlib.widgets import CheckButtons
 
 # ---------------------------------------------------------------- new experiment knobs
-HIST_SIMULATION = [(0,0),(1, 1),(2,2),(3,3)]      # list of (n_x, n_u) history lengths, e.g. [(0, 0), (1, 1), (3, 3)]
-CLF_SIMULATION = [False, True]  # run without / with the CLF
+HIST_SIMULATION = [(1, 1)]      # list of (n_x, n_u) history lengths, e.g. [(0, 0), (1, 1), (3, 3)]
+CLF_SIMULATION = ["velocity","tracking"]  # None = no CLF; "velocity" = velocity -> 0;
+                                                 # "tracking" = position error w.r.t. last received reference
 ALPHA = 0.05                    # CLF decay per step (must NOT depend on AoI)
 SLACK_WEIGHT = 1.0              # CLF slack penalty (must NOT depend on AoI)
 NO_CBF_VALUES = (None, False, 0, "none", "None")   # cbf_mode values meaning "no filter"
@@ -96,7 +97,8 @@ def main():
             for i in SWITCHING_SIMULATION:
                 for j in CBF_SIMULATION:
                     for (n_x, n_u) in HIST_SIMULATION:
-                        for use_clf in CLF_SIMULATION:
+                        for clf_mode in CLF_SIMULATION:
+                            use_clf = clf_mode is not None
                             lossless, switching, cbf_mode, aoi_aware = k, i, j, a
                             no_cbf = cbf_mode in NO_CBF_VALUES
 
@@ -113,13 +115,14 @@ def main():
                                              make_cbf=make_cbf, get_u_cbf=get_u,
                                              switching=switching, lossless=lossless, aoi_aware=aoi_aware,
                                              n_x=n_x, n_u=n_u, use_clf=use_clf,
+                                             equilibrium=clf_mode,
                                              alpha=ALPHA, slack_weight=SLACK_WEIGHT)
 
                             if no_cbf:
                                 name = f"lossless={k} switch={switching} no-cbf aoi_aware={aoi_aware}"
                             else:
                                 name = (f"lossless={k} switch={switching} cbf={cbf_mode} aoi_aware={aoi_aware} "
-                                        f"clf={use_clf} hist=({n_x},{n_u})")
+                                        f"clf={clf_mode} hist=({n_x},{n_u})")
                             Ys.append(Y)
                             Ys_names.append(name)
                             logs[name] = simulate_run.last_log
