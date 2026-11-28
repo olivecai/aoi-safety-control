@@ -13,8 +13,8 @@ SAFE_TOLERANCE = 1e-10
 
 # these are trajectory parameters
 HUMAN_DESIRED_TRAJ_RADIUS = 6.0 #if exceeds SAFE_SET_RADIUS then you should see that clamping of trajecotry
-N_s = 2000 #timesteps in ms
-RNG_SEED = 8 # arbitrary random number
+N_s = 1000 #timesteps in ms
+RNG_SEED = 1 # arbitrary random number
 AOI_THRESHOLD = 13 #threshold for when to activate safe mode in the safe mode switching case (paper says 16 but my simualtions show 13-16 is all pretty much the same goodness)
 
 ### DO NOT EDIT THIS SECTION ####
@@ -41,4 +41,13 @@ SWITCHING_SIMULATION =[SWITCHING^1]
 CBF_SIMULATION = [USE_CLF_CBF_LOCAL_LIMIT]
 LOSSLESS_SIMULATION=[LOSSLESS^1]
 AOI_SIMULATION=[AOI_AWARE]
-                    
+RANDOM_SEEDS = [RNG_SEED+i for i in range(100)] # you can add more random seeds to this list to run multiple runs of the same simulation with different random seeds, and then take the mean and variance of the results
+
+
+HIST_SIMULATION = [(1, 1)]      # list of (n_x, n_u) history lengths, e.g. [(0, 0), (1, 1), (3, 3)]
+CLF_SIMULATION = ["tracking"]  # None = no CLF; "velocity" = velocity -> 0;
+                                                 # "tracking" = position error w.r.t. last received reference
+ALPHA = 0.05                    # CLF decay per step (must NOT depend on AoI)
+SLACK_WEIGHT = 1.0             # CLF slack penalty (must NOT depend on AoI)
+NO_CBF_VALUES = (None, False, 0, "none", "None")   # cbf_mode values meaning "no filter"
+

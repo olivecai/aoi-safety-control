@@ -78,11 +78,15 @@ def simulate_run(N_s, h_seq, aoi_threshold_f, aoi_threshold_b, rng, make_cbf, ge
         if lossless:
             sigma_f = sigma_b = 1
         else:
+            
             sigma_f = int(rng.random() < (p1_f if sigma_f else 1 - p0_f))
             sigma_b = int(rng.random() < (p1_b if sigma_b else 1 - p0_b))
+            
 
         aoi_f = aoi(sigma_f, aoi_f, AOI_CAP)
         aoi_b = aoi(sigma_b, aoi_b, AOI_CAP)
+        # print("aoi f, aoi b")
+        # print(aoi_f, aoi_b)
 
         # mode
         theta = get_theta(aoi_f, aoi_b, aoi_threshold_f, aoi_threshold_b)

@@ -20,7 +20,7 @@ from experiment_go import *
 import cvxpy as cp
 import numpy as np
 from scipy.linalg import solve_discrete_are
-from scipy.linalg import solve_discrete_lyapunov
+from scipy.linalg import solve_discrete_lyapunov, eigh
 
 DEBUG = False
 
@@ -44,17 +44,18 @@ def build_augmented(Ap, Bp, n_x=1, n_u=1):
             A_z[dx + j * m:dx + (j + 1) * m, dx + (j - 1) * m:dx + j * m] = np.eye(m)
     return A_z, B_z
 
-from scipy.linalg import solve_discrete_lyapunov, eigh
-
 def clf_params(Ap, Bp, n_x=1, n_u=1, equilibrium="velocity", q_pos=1.0, q_vel=1.0,
                eps_pos=1e-2, stale_scale=1.0, eps_u=1e-2, r=1.0, verbose=False):
     n, m = Ap.shape[0], Bp.shape[1]
     A_z, B_z = build_augmented(Ap, Bp, n_x, n_u)
-    w = 3000
+    w = 3000 # nov 24 2026: i noticed that a high weight made the traacking CLF perform super well
+    wv = 1
     if equilibrium == "tracking":
         diag = [w * q_pos, q_vel] + [stale_scale * w * q_pos, stale_scale * q_vel] * n_x
     elif equilibrium == "velocity":
-        diag = [w * eps_pos, q_vel] + [w * eps_pos, stale_scale * q_vel] * n_x
+        diag = [ eps_pos,wv* q_vel] + [eps_pos, wv* stale_scale * q_vel] * n_x
+        # diag = [ w*,wv* q_vel] + [w*q_pos, wv* stale_scale * q_vel] * n_x
+
     else:
         raise ValueError(f"unknown equilibrium: {equilibrium!r}")
     diag += [eps_u] * (m * n_u)
@@ -150,8 +151,8 @@ def make(n_aug, use_clf=True):
     r = cp.Parameter(nonneg=True)
 
     constraints = [cp.norm(CpApxp + CpBp * u) <= rho,       # wall disc
-                   cp.norm(CpBp * u - diff) <= r
-                   ]           # local disc, == ||y_next - y_t|| <= r
+                   cp.norm(CpBp * u - diff) <= r    # local disc, == ||y_next - y_t|| <= r
+                   ]        
     objective = cp.sum_squares(u - u_r)
 
     if use_clf:

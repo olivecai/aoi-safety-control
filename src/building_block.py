@@ -19,6 +19,9 @@ MODE_SAFE = 1
 p1_f, p0_f = 0.93, 0.91   # forward:  stay-success, stay-failure
 p1_b, p0_b = 0.93, 0.91   # backward: stay-success, stay-failure
 
+# below is EXPERIMENTAL
+# p1_f, p0_f = 0.1, 0.9   # forward:  stay-success, stay-failure
+# p1_b, p0_b = 0.1, 0.9   # backward: stay-success, stay-failure
 Cz = np.array([15.0, 0.05, 0, 0, 0, 0, 0, 0])
 
 AOI_CAP = 100
